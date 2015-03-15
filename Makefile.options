@@ -3,7 +3,7 @@
 #           SETTINGS FOR THE ELIOM PROJECT pumgrana
 #----------------------------------------------------------------------
 
-PROJECT_NAME := pumgrana
+PROJECT_NAME := pumgrana_api
 
 # Source files for the server
 SERVER_FILES := $(wildcard *.eliomi *.eliom)
