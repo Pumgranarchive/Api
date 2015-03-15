@@ -14,7 +14,7 @@ CLIENT_FILES := $(wildcard *.eliomi *.eliom)
 SERVER_FILES_DOC :=     $(wildcard *.eliomi)
 
 # Source files for the client
-CLIENT_FILES_DOC :=     API_conf.eliomi         \
+CLIENT_FILES_DOC :=     Conf.eliomi         \
                         nosql_store.eliomi      \
                         rdf_store.eliomi
 

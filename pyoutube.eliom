@@ -32,21 +32,21 @@ let listenner uri =
     Lwt.return new_data
   with exc -> log uri exc ""
 
-lwt cash = Pcash.make "Youtube" listenner
+lwt cash = Cash.make "Youtube" listenner
 
 (******************************************************************************
 ******************************** Funtions *************************************
 *******************************************************************************)
 
 let get_youtube_triple uris =
-  lwt know_uris = Lwt_list.filter_p (Pcash.exists cash) uris in
-  lwt unknow_uris = Lwt_list.filter_p (Pcash.not_exists cash) uris in
-  let know_data = List.map (Pcash.get cash) know_uris in
+  lwt know_uris = Lwt_list.filter_p (Cash.exists cash) uris in
+  lwt unknow_uris = Lwt_list.filter_p (Cash.not_exists cash) uris in
+  let know_data = List.map (Cash.get cash) know_uris in
   let ids = List.map id_of_uri unknow_uris in
   let add lwt_data =
     lwt data = lwt_data in
     let uri, title, summary = data in
-    Pcash.add cash uri data
+    Cash.add cash uri data
   in
   let lwt_format data = Lwt.return (format data) in
   lwt new_data =

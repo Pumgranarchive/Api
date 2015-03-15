@@ -3,7 +3,7 @@
 ** This module registre services of API
 *)
 
-open API_tools
+open Tools
 
 module Yojson = Yojson.Basic
 
@@ -21,7 +21,7 @@ let map func = function
 let empty_fallback path msg =
   let get_params = Eliom_parameter.unit in
   let service = Eliom_service.Http.service ~path ~get_params () in
-  let handler () () = return_of_error (API_tools.bad_request msg) in
+  let handler () () = return_of_error (Tools.bad_request msg) in
   let _ =  Eliom_registration.String.register ~service handler in
   service
 
@@ -48,7 +48,7 @@ let _ =
     ~service:uri_from_platform
     (fun (plt, name) () ->
       let name = Rdf_store.uri_decode name in
-      return_of_json (API_core.uri_from_platform plt name))
+      return_of_json (Api.uri_from_platform plt name))
 
 (* Get_detail  *)
 let get_detail =
@@ -60,7 +60,7 @@ let get_detail =
 let _ =
   Eliom_registration.String.register
     ~service:get_detail
-    (fun content_uri () -> return_of_json (API_core.get_detail content_uri))
+    (fun content_uri () -> return_of_json (Api.get_detail content_uri))
 
 (* get_contents *)
 let get_contents =
@@ -76,7 +76,7 @@ let _ =
     ~service:get_contents
     (fun (filter, tags_uris) () ->
       let tags_uri_dcd = map (List.map Rdf_store.uri_decode) tags_uris in
-      return_of_json (API_core.get_contents filter tags_uri_dcd))
+      return_of_json (Api.get_contents filter tags_uri_dcd))
 
 (** This service allow a simpler matching url without superfluous slashs,
     due by the two optional parameters. *)
@@ -84,7 +84,7 @@ let _ =
   Eliom_registration.String.register_service
     ~path:["api"; "content"; "list_content"]
     ~get_params:Eliom_parameter.(suffix (opt (string "filter")))
-    (fun filter () -> return_of_json (API_core.get_contents filter None))
+    (fun filter () -> return_of_json (Api.get_contents filter None))
 
 (* research_contents *)
 let research_contents =
@@ -99,7 +99,7 @@ let _ =
   Eliom_registration.String.register
     ~service:research_contents
     (fun (filter, research) () ->
-      return_of_json (API_core.research_contents filter research))
+      return_of_json (Api.research_contents filter research))
 
 (* Insert content *)
 let fallback_insert_content =
@@ -122,19 +122,19 @@ let _ =
     ~service:insert_content_json
     (fun () (input_type, ostream) ->
       let aux () =
-        lwt yojson = API_tools.json_of_ocsigen_string_stream input_type ostream in
+        lwt yojson = Tools.json_of_ocsigen_string_stream input_type ostream in
         let title, summary, text, tags_uri =
-          API_deserialize.get_insert_content_data yojson
+          Deserialize.get_insert_content_data yojson
         in
-          return_of_json (API_core.insert_content title summary text tags_uri)
+          return_of_json (Api.insert_content title summary text tags_uri)
       in
-      API_tools.manage_bad_request aux)
+      Tools.manage_bad_request aux)
 
 let _ =
   Eliom_registration.String.register
     ~service:insert_content
     (fun () (title, (summary, (text, tags_uri))) ->
-      return_of_json (API_core.insert_content title summary text tags_uri)
+      return_of_json (Api.insert_content title summary text tags_uri)
   )
 
 (* Update content *)
@@ -159,14 +159,14 @@ let _ =
     ~service:update_content_json
     (fun () (input_type, ostream) ->
       let aux () =
-        lwt yojson = API_tools.json_of_ocsigen_string_stream input_type ostream in
+        lwt yojson = Tools.json_of_ocsigen_string_stream input_type ostream in
         let content_uri, title, summary, text, tags_uri =
-          API_deserialize.get_update_content_data yojson
+          Deserialize.get_update_content_data yojson
         in
-        return_of_json (API_core.update_content content_uri
+        return_of_json (Api.update_content content_uri
                           title summary text tags_uri)
       in
-      API_tools.manage_bad_request aux)
+      Tools.manage_bad_request aux)
 
 let _ =
   Eliom_registration.String.register
@@ -174,7 +174,7 @@ let _ =
     (fun () (content_uri, (title, (summary, (text, tags_uri)))) ->
       let uri = Rdf_store.uri_decode content_uri in
       let uris = map (List.map Rdf_store.uri_decode) tags_uri in
-      return_of_json (API_core.update_content uri
+      return_of_json (Api.update_content uri
                         title summary text uris))
 
 (* Update content tags *)
@@ -196,13 +196,13 @@ let _ =
     ~service:update_content_tags_json
     (fun () (input_type, ostream) ->
       let aux () =
-        lwt yojson = API_tools.json_of_ocsigen_string_stream input_type ostream in
+        lwt yojson = Tools.json_of_ocsigen_string_stream input_type ostream in
         let content_uri, tags_uri =
-          API_deserialize.get_update_content_tags_data yojson
+          Deserialize.get_update_content_tags_data yojson
         in
-        return_of_json (API_core.update_content_tags content_uri tags_uri)
+        return_of_json (Api.update_content_tags content_uri tags_uri)
       in
-      API_tools.manage_bad_request aux)
+      Tools.manage_bad_request aux)
 
 let _ =
   Eliom_registration.String.register
@@ -210,7 +210,7 @@ let _ =
     (fun () (content_uri, tags_uri) ->
       let uri = Rdf_store.uri_decode content_uri in
       let uris = List.map Rdf_store.uri_decode tags_uri in
-      return_of_json (API_core.update_content_tags uri uris))
+      return_of_json (Api.update_content_tags uri uris))
 
 
 (* Delete content *)
@@ -231,18 +231,18 @@ let _ =
     ~service:delete_contents_json
     (fun () (input_type, ostream) ->
       let aux () =
-        lwt yojson = API_tools.json_of_ocsigen_string_stream input_type ostream in
-        let contents_uri = API_deserialize.get_delete_contents_data yojson in
-        return_of_json (API_core.delete_contents contents_uri)
+        lwt yojson = Tools.json_of_ocsigen_string_stream input_type ostream in
+        let contents_uri = Deserialize.get_delete_contents_data yojson in
+        return_of_json (Api.delete_contents contents_uri)
       in
-      API_tools.manage_bad_request aux)
+      Tools.manage_bad_request aux)
 
 let _ =
   Eliom_registration.String.register
     ~service:delete_contents
     (fun () (contents_uri) ->
       let uris = List.map Rdf_store.uri_decode contents_uri in
-      return_of_json (API_core.delete_contents uris))
+      return_of_json (Api.delete_contents uris))
 
 
 (*
@@ -261,7 +261,7 @@ let _ =
   Eliom_registration.String.register
     ~service:get_tags_by_type
     (fun (tag_type) () ->
-      return_of_json (API_core.get_tags_by_type tag_type))
+      return_of_json (Api.get_tags_by_type tag_type))
 
 (* Get tag from research *)
 let get_tags_from_research =
@@ -274,7 +274,7 @@ let _ =
   Eliom_registration.String.register
     ~service:get_tags_from_research
     (fun research () ->
-      return_of_json (API_core.get_tags_from_research research))
+      return_of_json (Api.get_tags_from_research research))
 
 (* Get_tag_from_content *)
 let get_tags_from_content =
@@ -288,7 +288,7 @@ let _ =
     ~service:get_tags_from_content
     (fun (content_uri) () ->
       let uri = Rdf_store.uri_decode content_uri in
-      return_of_json (API_core.get_tags_from_content uri))
+      return_of_json (Api.get_tags_from_content uri))
 
 
 (* Get_tag_from_content_link *)
@@ -302,7 +302,7 @@ let _ =
   Eliom_registration.String.register
     ~service:get_tags_from_content_link
     (fun (content_uri) () ->
-      return_of_json (API_core.get_tags_from_content_link content_uri))
+      return_of_json (Api.get_tags_from_content_link content_uri))
 
 
 (* Insert tags *)
@@ -324,20 +324,20 @@ let _ =
     ~service:insert_tags_json
     (fun () (input_type, ostream) ->
       let aux () =
-        lwt yojson = API_tools.json_of_ocsigen_string_stream input_type ostream in
+        lwt yojson = Tools.json_of_ocsigen_string_stream input_type ostream in
         let type_name, uri, tags_subject =
-          API_deserialize.get_insert_tags_data yojson
+          Deserialize.get_insert_tags_data yojson
         in
-        return_of_json (API_core.insert_tags type_name uri tags_subject)
+        return_of_json (Api.insert_tags type_name uri tags_subject)
       in
-      API_tools.manage_bad_request aux)
+      Tools.manage_bad_request aux)
 
 let _ =
   Eliom_registration.String.register
     ~service:insert_tags
     (fun () (type_name, (uri, tags_subject)) ->
       let uri = map Rdf_store.uri_decode uri in
-      return_of_json (API_core.insert_tags type_name uri tags_subject))
+      return_of_json (Api.insert_tags type_name uri tags_subject))
 
 (* Delete tags *)
 let fallback_delete_tags =
@@ -356,18 +356,18 @@ let _ =
     ~service:delete_tags_json
     (fun () (input_type, ostream) ->
       let aux () =
-        lwt yojson = API_tools.json_of_ocsigen_string_stream input_type ostream in
-        let tags_uri = API_deserialize.get_delete_tags_data yojson in
-        return_of_json (API_core.delete_tags tags_uri)
+        lwt yojson = Tools.json_of_ocsigen_string_stream input_type ostream in
+        let tags_uri = Deserialize.get_delete_tags_data yojson in
+        return_of_json (Api.delete_tags tags_uri)
       in
-      API_tools.manage_bad_request aux)
+      Tools.manage_bad_request aux)
 
 let _ =
   Eliom_registration.String.register
     ~service:delete_tags
     (fun () (tags_uri) ->
       let uris = List.map Rdf_store.uri_decode tags_uri in
-      return_of_json (API_core.delete_tags uris))
+      return_of_json (Api.delete_tags uris))
 
 (*
 ** links
@@ -385,7 +385,7 @@ let _ =
     ~service:get_link_detail
     (fun link_uri () ->
       let uri = Rdf_store.uri_decode link_uri in
-      return_of_json (API_core.get_link_detail uri))
+      return_of_json (Api.get_link_detail uri))
 
 (* Get_links_from_content *)
 let get_links_from_content =
@@ -399,7 +399,7 @@ let _ =
     ~service:get_links_from_content
     (fun content_uri () ->
       let content_uri_dcd = Rdf_store.uri_decode content_uri in
-      return_of_json (API_core.get_links_from_content content_uri_dcd))
+      return_of_json (Api.get_links_from_content content_uri_dcd))
 
 
 (* Get_links_from_content_tags *)
@@ -417,7 +417,7 @@ let _ =
       let content_uri_dcd = Rdf_store.uri_decode content_uri in
       let tags_uri_dcd = map (List.map Rdf_store.uri_decode) tags_uris in
       return_of_json
-        (API_core.get_links_from_content_tags content_uri_dcd tags_uri_dcd))
+        (Api.get_links_from_content_tags content_uri_dcd tags_uri_dcd))
 
 (* Get_links_from_research *)
 let get_links_from_research =
@@ -432,7 +432,7 @@ let _ =
    ~service:get_links_from_research
     (fun (content_uri, research) () ->
       let uri_dcd = Rdf_store.uri_decode content_uri in
-      return_of_json (API_core.get_links_from_research uri_dcd research))
+      return_of_json (Api.get_links_from_research uri_dcd research))
 
 (* Click on Link *)
 let click_onlink =
@@ -447,9 +447,9 @@ let _ =
       let aux () =
         let link_id_dcd = Rdf_store.uri_decode str_link_id in
         let link_id = Ptype.link_id_of_string link_id_dcd in
-        return_of_json (API_core.click_onlink link_id)
+        return_of_json (Api.click_onlink link_id)
       in
-      API_tools.manage_bad_request aux)
+      Tools.manage_bad_request aux)
 
 (* Back button *)
 let back_button =
@@ -464,9 +464,9 @@ let _ =
       let aux () =
         let link_id_dcd = Rdf_store.uri_decode str_link_id in
         let link_id = Ptype.link_id_of_string link_id_dcd in
-        return_of_json (API_core.back_button link_id)
+        return_of_json (Api.back_button link_id)
       in
-      API_tools.manage_bad_request aux)
+      Tools.manage_bad_request aux)
 
 (* Insert links *)
 let fallback_insert_links =
@@ -488,11 +488,11 @@ let _ =
     ~service:insert_links_json
     (fun () (input_type, ostream) ->
       let aux () =
-        lwt yojson = API_tools.json_of_ocsigen_string_stream input_type ostream in
-        let data = API_deserialize.get_insert_links_data yojson in
-        return_of_json (API_core.insert_links data)
+        lwt yojson = Tools.json_of_ocsigen_string_stream input_type ostream in
+        let data = Deserialize.get_insert_links_data yojson in
+        return_of_json (Api.insert_links data)
       in
-      API_tools.manage_bad_request aux)
+      Tools.manage_bad_request aux)
 
 let _ =
   Eliom_registration.String.register
@@ -505,9 +505,9 @@ let _ =
            List.map Rdf_store.uri_decode tags_uri)
         in
         let formated_data = List.map to_triple data in
-        return_of_json (API_core.insert_links formated_data)
+        return_of_json (Api.insert_links formated_data)
       in
-      API_tools.manage_bad_request aux)
+      Tools.manage_bad_request aux)
 
 (* Insert scored links *)
 let fallback_insert_scored_links =
@@ -530,11 +530,11 @@ let _ =
     ~service:insert_scored_links_json
     (fun () (input_type, ostream) ->
       let aux () =
-        lwt yojson = API_tools.json_of_ocsigen_string_stream input_type ostream in
-        let data = API_deserialize.get_insert_scored_links_data yojson in
-        return_of_json (API_core.insert_scored_links data)
+        lwt yojson = Tools.json_of_ocsigen_string_stream input_type ostream in
+        let data = Deserialize.get_insert_scored_links_data yojson in
+        return_of_json (Api.insert_scored_links data)
       in
-      API_tools.manage_bad_request aux)
+      Tools.manage_bad_request aux)
 
 let _ =
   Eliom_registration.String.register
@@ -548,9 +548,9 @@ let _ =
            score)
         in
         let formated_data = List.map to_triple data in
-        return_of_json (API_core.insert_scored_links formated_data)
+        return_of_json (Api.insert_scored_links formated_data)
       in
-      API_tools.manage_bad_request aux)
+      Tools.manage_bad_request aux)
 
 (* Update links *)
 let fallback_update_link =
@@ -571,11 +571,11 @@ let _ =
     ~service:update_links_json
     (fun () (input_type, ostream) ->
       let aux () =
-        lwt yojson = API_tools.json_of_ocsigen_string_stream input_type ostream in
-        let data = API_deserialize.get_update_links_data yojson in
-        return_of_json (API_core.update_links data)
+        lwt yojson = Tools.json_of_ocsigen_string_stream input_type ostream in
+        let data = Deserialize.get_update_links_data yojson in
+        return_of_json (Api.update_links data)
       in
-      API_tools.manage_bad_request aux)
+      Tools.manage_bad_request aux)
 
 let _ =
   Eliom_registration.String.register
@@ -586,8 +586,8 @@ let _ =
          List.map Rdf_store.uri_decode tags_uri)
       in
       let data_decoded = List.map decode data in
-      let aux () = return_of_json (API_core.update_links data_decoded) in
-      API_tools.manage_bad_request aux)
+      let aux () = return_of_json (Api.update_links data_decoded) in
+      Tools.manage_bad_request aux)
 
 (* Delete links *)
 let fallback_delete_links =
@@ -606,15 +606,15 @@ let _ =
     ~service:delete_links_json
     (fun () (input_type, ostream) ->
       let aux () =
-        lwt yojson = API_tools.json_of_ocsigen_string_stream input_type ostream in
-        let links_uri = API_deserialize.get_delete_links_data yojson in
-        return_of_json (API_core.delete_links links_uri)
+        lwt yojson = Tools.json_of_ocsigen_string_stream input_type ostream in
+        let links_uri = Deserialize.get_delete_links_data yojson in
+        return_of_json (Api.delete_links links_uri)
       in
-      API_tools.manage_bad_request aux)
+      Tools.manage_bad_request aux)
 
 let _ =
   Eliom_registration.String.register
     ~service:delete_links
     (fun () (links_uri) ->
       let uris = List.map Rdf_store.uri_decode links_uri in
-      return_of_json (API_core.delete_links uris))
+      return_of_json (Api.delete_links uris))

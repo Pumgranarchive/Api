@@ -50,7 +50,7 @@ let data_from_uri uri =
     Lwt.return (uri, title, summary, body, true)
   with exc -> log str_uri exc (pretty_to_string json)
 
-lwt cash = Pcash.make "Readability" data_from_uri
+lwt cash = Cash.make "Readability" data_from_uri
 
 (******************************************************************************
 ******************************** Funtions *************************************
@@ -58,12 +58,12 @@ lwt cash = Pcash.make "Readability" data_from_uri
 
 let get_readability_data uris =
   let aux uri =
-    lwt exist = Pcash.exists cash uri in
+    lwt exist = Cash.exists cash uri in
     if exist
-    then Pcash.get cash uri
+    then Cash.get cash uri
     else
       lwt data = data_from_uri uri in
-      lwt () = Pcash.add cash uri data in
+      lwt () = Cash.add cash uri data in
       Lwt.return data
   in
   Lwt_list.map_exc aux uris

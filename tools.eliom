@@ -41,12 +41,12 @@ let detail_ret_name = "links_uri"
 
 let json_of_ocsigen_string_stream input_type_opt ostream_opt =
   let _ = match input_type_opt with
-    | None                                -> raise API_conf.(Pum_exc(return_not_found, "The content_type have to not be None."))
+    | None                                -> raise Conf.(Pum_exc(return_not_found, "The content_type have to not be None."))
     | Some (("application", "json"), _)   -> ()
-    | Some _                              -> raise API_conf.(Pum_exc(return_not_found, "The content_type have to be application/json."))
+    | Some _                              -> raise Conf.(Pum_exc(return_not_found, "The content_type have to be application/json."))
   in
   match ostream_opt with
-  | None                -> raise API_conf.(Pum_exc(return_not_found, "The ocsigen stream have to not be None."))
+  | None                -> raise Conf.(Pum_exc(return_not_found, "The ocsigen stream have to not be None."))
   | Some ostream        ->
     let stream = Ocsigen_stream.get ostream in
     lwt str_json = Ocsigen_stream.string_of_stream 1000000 stream in
@@ -57,7 +57,7 @@ let json_of_ocsigen_string_stream input_type_opt ostream_opt =
 
 let check_empty_ocaml_list l original_value =
   if (l = [])
-  then raise API_conf.(Pum_exc(return_not_found,
+  then raise Conf.(Pum_exc(return_not_found,
                                errstr_not_found original_value))
   else l
 
@@ -90,12 +90,12 @@ let format_ret ?param_name status ?error_str (param_value:Yojson.json) =
     func: the function which return the result.
     content_name: the name of the content in the result.
 
-    If the exception API_conf.Pum_exc (value, error_str) is fired,
+    If the exception Conf.Pum_exc (value, error_str) is fired,
     this data are use for the return.
     For any others exceptions, internal server error (500) is returned *)
-let check_return ?(default_return=API_conf.return_ok) ?param_name func =
+let check_return ?(default_return=Conf.return_ok) ?param_name func =
   let null_return () =
-    Lwt.return (format_ret ?param_name API_conf.return_no_content `Null)
+    Lwt.return (format_ret ?param_name Conf.return_no_content `Null)
   in
   let error_return status error_str =
     Lwt.return (format_ret ?param_name status ~error_str `Null)
@@ -111,7 +111,7 @@ let check_return ?(default_return=API_conf.return_ok) ?param_name func =
     | `List ret, _      -> valided_return ret
     | ret, _            -> valided_return [ret]
   with
-  | API_conf.Pum_exc (v, str)   ->
+  | Conf.Pum_exc (v, str)   ->
     begin
       print_endline ((string_of_int v) ^ ": " ^ str);
       error_return v str
@@ -119,10 +119,10 @@ let check_return ?(default_return=API_conf.return_ok) ?param_name func =
   | exc                         ->
     begin
       print_endline (Printexc.to_string exc);
-      error_return API_conf.return_internal_error API_conf.errstr_internal_error
+      error_return Conf.return_internal_error Conf.errstr_internal_error
     end
 
-let bad_request ?(error_value=API_conf.return_not_found) error_str =
+let bad_request ?(error_value=Conf.return_not_found) error_str =
   print_endline ((string_of_int error_value) ^ ": " ^ error_str);
   Lwt.return (Yojson.to_string (format_ret error_value ~error_str `Null))
 
@@ -130,9 +130,9 @@ let manage_bad_request aux =
   try_lwt
     aux ()
   with
-  | API_conf.Pum_exc (_, str)   ->
+  | Conf.Pum_exc (_, str)   ->
     return_of_error (bad_request str)
   | exc                         ->
     print_endline (Printexc.to_string exc);
-    return_of_error (bad_request ~error_value:API_conf.return_internal_error
-                       API_conf.errstr_internal_error)
+    return_of_error (bad_request ~error_value:Conf.return_internal_error
+                       Conf.errstr_internal_error)

@@ -113,7 +113,7 @@ val format_ret: ?param_name:string -> int -> ?error_str:string ->
     param_name: the name of the returned data.
     func: the function which return the result.
 
-    If the exception API_conf.Pum_exc (error_value, error_str) is raised,
+    If the exception Conf.Pum_exc (error_value, error_str) is raised,
     the exception's data are use to build the return.
     For any others exceptions, internal server error (500) is returned *)
 val check_return: ?default_return:int -> ?param_name:string ->

@@ -1,10 +1,10 @@
 {server{
 
 (**
-  {b Pcash module manage persistant cash and its refreshing}
+  {b Cash module manage persistant cash and its refreshing}
 *)
 
-(** The Pcash type *)
+(** The Cash type *)
 type 'a t
 
 (** Type of listenner used for refreshing  *)

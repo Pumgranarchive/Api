@@ -1,5 +1,5 @@
 (*
-** API_deserializer
+** Deserializer
 ** This module provide tools to deserialize yojson for API's services.
  *)
 
@@ -7,7 +7,7 @@ module Yojson = Yojson.Basic
 
 open Yojson.Util
 open Pjson
-open API_conf
+open Conf
 
 (** Get insert content input data *)
 let get_insert_content_data json_content =

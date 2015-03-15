@@ -1,22 +1,15 @@
 {1 Pumgrana server side documentation}
 
 {!modules:
-        API_conf
-        API_core
-        API_tools
-        Pcash
+        Conf
+        Api
+        Tools
+        Cash
         Nosql_store
         Rdf_store
         Preadability
         Pyoutube
         PumBot
-        AddContent
-        Container
-        ContentList
-        LinkBar
-        SideBar
-        MainLogo
-        MiddleSearch
 }
 
 {2 Index}
