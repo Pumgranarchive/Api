@@ -1,23 +1,12 @@
-let old = ref []
-
-(** Add given uris only if there are totaly unkown *)
-let filter_and_add uris =
-  let aux uri =
-    let exists = List.exists (fun x -> Ptype.compare_uri uri x = 0) !old in
-    if not exists then old := uri::!old;
-    not exists
-  in
-  List.filter aux uris
+let bot_api_uri = "http://127.0.0.1:8083"
+let default_iteration = "2550"
 
 let launch uris =
-  let uris = filter_and_add uris in
-  let path = "../pum_bot/pum_bot" in
-  let options = "-i 2550" in
-  let redirect = "> /dev/null 2>&1" in
-  let bg = "&" in
-  let string_of_uri uri = "\"" ^ Ptype.string_of_uri uri ^ "\"" in
-  let str_uris = List.map string_of_uri uris in
-  let concat_uris = String.concat " " str_uris in
-  let cmd = String.concat " " [path; options; concat_uris; redirect; bg] in
-  if List.length uris > 0
-  then Lwt.async (fun () -> print_endline cmd; Lwt.return (ignore (Sys.command cmd)))
+  let base_url = bot_api_uri ^ "/run/"^default_iteration^"//" in
+  let str_uris = List.map (fun x -> Ptype.uri_encode (Ptype.string_of_uri x)) uris in
+  let concat_uris = String.concat "/" str_uris in
+  let request_url = base_url ^ concat_uris ^ "/" in
+  let request_uri = Uri.of_string request_url in
+  (* print_endline request_url; *)
+  try (Cohttp_lwt_unix.Client.get request_uri; ())
+  with e -> (print_endline (Printexc.to_string e); ())
