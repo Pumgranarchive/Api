@@ -38,7 +38,7 @@ let post_json fallback =
 (* Get_detail  *)
 let uri_from_platform =
   Eliom_service.Http.service
-    ~path:["api"; "content"; "from_platform"]
+    ~path:["content"; "from_platform"]
     ~get_params:Eliom_parameter.(suffix (string "platform_name" **
                                            string "content_name"))
     ()
@@ -53,7 +53,7 @@ let _ =
 (* Get_detail  *)
 let get_detail =
   Eliom_service.Http.service
-    ~path:["api"; "content"; "detail"]
+    ~path:["content"; "detail"]
     ~get_params:Eliom_parameter.(suffix (string "content_uri"))
     ()
 
@@ -65,7 +65,7 @@ let _ =
 (* get_contents *)
 let get_contents =
   Eliom_service.Http.service
-    ~path:["api"; "content"; "list_content"]
+    ~path:["content"; "list"]
     ~get_params:Eliom_parameter.(suffix (opt (string "filter") **
                                            opt (list "tags" (string "uri"))))
     ()
@@ -82,14 +82,14 @@ let _ =
     due by the two optional parameters. *)
 let _ =
   Eliom_registration.String.register_service
-    ~path:["api"; "content"; "list_content"]
+    ~path:["content"; "list"]
     ~get_params:Eliom_parameter.(suffix (opt (string "filter")))
     (fun filter () -> return_of_json (Api.get_contents filter None))
 
 (* research_contents *)
 let research_contents =
   Eliom_service.Http.service
-    ~path:["api"; "content"; "research"]
+    ~path:["content"; "research"]
     ~get_params:Eliom_parameter.(suffix (opt (string "filter") **
                                            (string "research")))
     ()
@@ -103,7 +103,7 @@ let _ =
 
 (* Insert content *)
 let fallback_insert_content =
-  empty_fallback ["api"; "content"; "insert"]
+  empty_fallback ["content"; "insert"]
     "title, summary and text parameters are mandatory"
 
 let insert_content_json = post_json fallback_insert_content
@@ -139,7 +139,7 @@ let _ =
 
 (* Update content *)
 let fallback_update_content =
-  empty_fallback ["api"; "content"; "update"]
+  empty_fallback ["content"; "update"]
     "content_uri parameter is mandatory"
 
 let update_content_json = post_json fallback_update_content
@@ -179,7 +179,7 @@ let _ =
 
 (* Update content tags *)
 let fallback_update_content_tags =
-  empty_fallback ["api"; "content"; "update_tags"]
+  empty_fallback ["content"; "update_tags"]
     "content_uri parameter is mandatory"
 
 let update_content_tags_json = post_json fallback_update_content_tags
@@ -215,7 +215,7 @@ let _ =
 
 (* Delete content *)
 let fallback_delete_contents =
-  empty_fallback ["api"; "content"; "delete"]
+  empty_fallback ["content"; "delete"]
     "contents_uri parameter is mandatory"
 
 let delete_contents_json = post_json fallback_delete_contents
@@ -253,7 +253,7 @@ let _ =
 (* Get_tags_by_type *)
 let get_tags_by_type =
   Eliom_service.Http.service
-    ~path:["api"; "tag"; "list_by_type"]
+    ~path:["tag"; "from_type"]
     ~get_params:Eliom_parameter.(suffix (string "type_name"))
     ()
 
@@ -266,7 +266,7 @@ let _ =
 (* Get tag from research *)
 let get_tags_from_research =
   Eliom_service.Http.service
-    ~path:["api"; "tag"; "list_from_research"]
+    ~path:["tag"; "research"]
     ~get_params:Eliom_parameter.(suffix (string "research"))
     ()
 
@@ -279,7 +279,7 @@ let _ =
 (* Get_tag_from_content *)
 let get_tags_from_content =
   Eliom_service.Http.service
-    ~path:["api"; "tag"; "list_from_content"]
+    ~path:["tag"; "from_content"]
     ~get_params:Eliom_parameter.(suffix (string "content_uri"))
     ()
 
@@ -294,7 +294,7 @@ let _ =
 (* Get_tag_from_content_link *)
 let get_tags_from_content_link =
   Eliom_service.Http.service
-    ~path:["api"; "tag"; "list_from_content_links"]
+    ~path:["tag"; "from_content_links"]
     ~get_params:Eliom_parameter.(suffix (string "content_uri"))
     ()
 
@@ -307,7 +307,7 @@ let _ =
 
 (* Insert tags *)
 let fallback_insert_tags =
-  empty_fallback ["api"; "tag"; "insert"] "tags_subject parameter is mandatory"
+  empty_fallback ["tag"; "insert"] "tags_subject parameter is mandatory"
 
 let insert_tags_json = post_json fallback_insert_tags
 
@@ -341,7 +341,7 @@ let _ =
 
 (* Delete tags *)
 let fallback_delete_tags =
-  empty_fallback ["api"; "tag"; "delete"] "tags_uri parameter is mandatory"
+  empty_fallback ["tag"; "delete"] "tags_uri parameter is mandatory"
 
 let delete_tags_json = post_json fallback_delete_tags
 
@@ -376,7 +376,7 @@ let _ =
 (* Get_link_detail *)
 let get_link_detail =
   Eliom_service.Http.service
-    ~path:["api"; "link"; "detail"]
+    ~path:["link"; "detail"]
     ~get_params:Eliom_parameter.(suffix (string "link_uri"))
     ()
 
@@ -390,7 +390,7 @@ let _ =
 (* Get_links_from_content *)
 let get_links_from_content =
   Eliom_service.Http.service
-    ~path:["api"; "link"; "list_from_content"]
+    ~path:["link"; "from_content"]
     ~get_params:Eliom_parameter.(suffix (string "content_uri"))
     ()
 
@@ -405,7 +405,7 @@ let _ =
 (* Get_links_from_content_tags *)
 let get_links_from_content_tags =
      Eliom_service.Http.service
-       ~path:["api"; "link"; "list_from_content_tags"]
+       ~path:["link"; "from_content_tags"]
        ~get_params:Eliom_parameter.(suffix ((string "content_uri") **
           (opt (list "tags" (string "uri")))))
        ()
@@ -422,7 +422,7 @@ let _ =
 (* Get_links_from_research *)
 let get_links_from_research =
      Eliom_service.Http.service
-       ~path:["api"; "link"; "list_from_research"]
+       ~path:["link"; "from_research"]
        ~get_params:Eliom_parameter.(suffix ((string "content_uri") **
           (string "research")))
        ()
@@ -437,7 +437,7 @@ let _ =
 (* Click on Link *)
 let click_onlink =
   Eliom_service.Http.service
-    ~path:["api"; "link"; "click"]
+    ~path:["link"; "click"]
     ~get_params:Eliom_parameter.(suffix (string "link_id")) ()
 
 let _ =
@@ -454,7 +454,7 @@ let _ =
 (* Back button *)
 let back_button =
   Eliom_service.Http.service
-    ~path:["api"; "link"; "back_button"]
+    ~path:["link"; "back_button"]
     ~get_params:Eliom_parameter.(suffix (string "link_id")) ()
 
 let _ =
@@ -470,7 +470,7 @@ let _ =
 
 (* Insert links *)
 let fallback_insert_links =
-  empty_fallback ["api"; "link"; "insert"] "All parameters are mandatory"
+  empty_fallback ["link"; "insert"] "All parameters are mandatory"
 
 let insert_links =
   Eliom_service.Http.post_service
@@ -511,7 +511,7 @@ let _ =
 
 (* Insert scored links *)
 let fallback_insert_scored_links =
-  empty_fallback ["api"; "link"; "scored_insert"] "All parameters are mandatory"
+  empty_fallback ["link"; "scored_insert"] "All parameters are mandatory"
 
 let insert_scored_links =
   Eliom_service.Http.post_service
@@ -554,7 +554,7 @@ let _ =
 
 (* Update links *)
 let fallback_update_link =
-  empty_fallback ["api"; "link"; "update"] "All parameter are mandatory"
+  empty_fallback ["link"; "update"] "All parameter are mandatory"
 
 let update_links =
   Eliom_service.Http.post_service
@@ -591,7 +591,7 @@ let _ =
 
 (* Delete links *)
 let fallback_delete_links =
-  empty_fallback ["api"; "link"; "delete"] "links_uri parameter is mandatory"
+  empty_fallback ["link"; "delete"] "links_uri parameter is mandatory"
 
 let delete_links_json = post_json fallback_delete_links
 
