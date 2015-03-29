@@ -169,20 +169,18 @@ struct
       if length > 0 && operator = None
       then raise (Invalid_argument "Only the first operator should be None");
       let sep = string_of_operator operator in
-      let reg_contains_of_string str = "%(" ^ str ^ ")%" in
-      let where = where ^ sep in
+      let where = where ^ sep ^ name in
+      let to_regexp modulo strs =
+        let regexp = "(" ^ (String.concat "|" strs) ^ ")" in
+        if modulo then String.concat "" ["%"; regexp; "%"] else regexp
+      in
       match w_value with
-      | Depend v -> (where ^ name ^ " = " ^ v, params)
-      | Value v -> param_generator (where ^ name ^ " IN ", params) [v]
-      | Values vs -> param_generator (where ^ name ^ " IN ", params) vs
+      | Depend v -> (where ^ " = " ^ v, params)
+      | Value v -> param_generator (where ^ " IN ", params) [v]
+      | Values vs ->
+        param_generator (where ^ " SIMILAR TO ", params) [to_regexp false vs]
       | Contains vs ->
-        let aux (where, params) value =
-          let v = reg_contains_of_string value in
-          let sep = if String.length where > 0 then " OR " else "" in
-          param_generator (where ^ sep ^ name ^ " SIMILAR TO ", params) [v]
-        in
-        let regexps, params = List.fold_left aux ("", params) vs in
-        (where ^ "(" ^ regexps ^ ")", params)
+        param_generator (where ^ " SIMILAR TO ", params) [to_regexp true vs]
     in
     let where, params = List.fold_left aux data conditions in
     let where = if String.length where > 0 then " WHERE " ^ where else "" in
