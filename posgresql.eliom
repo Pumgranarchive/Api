@@ -25,6 +25,11 @@ struct
 
 end
 
+module Conf =
+struct
+  let limit = 20
+end
+
 module Format =
 struct
 
@@ -222,13 +227,14 @@ struct
 
   end
 
-  let select format tables conditions =
+  let select format tables conditions max_size =
     if List.length tables < 1
     then raise (Invalid_argument "from table could not be null");
     let select = "SELECT " ^ (Util.string_of_format format) in
     let from = " FROM " ^ (String.concat ", " tables) in
     let where = Util.where_generator 0 conditions in
-    select ^ from ^ where
+    let limit = " LIMIT " ^ (string_of_int max_size) in
+    select ^ from ^ where ^ limit
 
   let insert format table returns =
     let str_format = Util.string_of_format format in
@@ -253,8 +259,9 @@ struct
     let returning = " RETURNING " ^ (String.concat ", " returns) in
     delete ^ where ^ returning
 
-  let union query1 query2 =
-    String.concat "" ["("; query1; ") UNION ("; query2; ")"]
+  let union query1 query2 max_size =
+    let limit = " LIMIT " ^ (string_of_int max_size) in
+    "("^query1^") UNION ("^query2^ ")" ^ limit
 
 end
 
@@ -283,33 +290,33 @@ struct
 
     let single_get () =
       let contitions = Query.([(None, "content_uri", Value)]) in
-      Query.select Format.To_get.content [Table.content] contitions
+      Query.select Format.To_get.content [Table.content] contitions Conf.limit
 
     let list () =
-      Query.select Format.To_get.content [Table.content] []
+      Query.select Format.To_get.content [Table.content] [] Conf.limit
 
     let list_by_subject () =
       let contitions =
         Query.([(None, "content.content_uri", Depend "tag.content_uri");
                 (And, "subject", Values)])
       in
-      Query.select Format.To_get.content Table.([content; tag]) contitions
+      Query.select Format.To_get.content Table.([content; tag]) contitions Conf.limit
 
     let search_by_title_and_summary () =
       let contitions = Query.([(None, "title", Values); (Or, "summary", Values)]) in
-      Query.select Format.To_get.content Table.([content]) contitions
+      Query.select Format.To_get.content Table.([content]) contitions Conf.limit
 
     let search_by_subject () =
       let contitions =
         Query.([(None, "content.content_uri", Depend "tag.content_uri");
                 (And, "subject", Values)])
       in
-      Query.select Format.To_get.content Table.([content; tag]) contitions
+      Query.select Format.To_get.content Table.([content; tag]) contitions Conf.limit
 
     let search () =
       let query1 = search_by_title_and_summary () in
       let query2 = search_by_subject () in
-      Query.union query1 query2
+      Query.union query1 query2 Conf.limit
 
     let insert () =
       let returns = ["content_uri"] in
