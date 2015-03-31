@@ -146,7 +146,7 @@ end
 module Query =
 struct
 
-  type where_value_type =
+  type where_type =
   | Depend of string
   | Value
   | Values
@@ -155,10 +155,12 @@ struct
   | String of string
   | Strings of string list
   | Words of string list
+  | Uri of Ptype.uri
+  | Uris of Ptype.uri list
 
   type operator = None | And | Or
 
-  type condition = (operator * string * where_value_type) list
+  type condition = (operator * string * where_type) list
 
   module Util =
   struct
@@ -172,6 +174,7 @@ struct
       String.concat ", " format
 
     let param_generator values =
+      let to_string = Ptype.string_of_uri in
       let to_regexp modulo strs =
         let regexp = String.concat "" ["("; (String.concat "|" strs); ")"] in
         if modulo then String.concat "" ["%"; regexp; "%"] else regexp
@@ -180,6 +183,8 @@ struct
         | String str   -> Some str
         | Strings strs -> Some (to_regexp false strs)
         | Words wds    -> Some (to_regexp true wds)
+        | Uri uri      -> Some (to_string uri)
+        | Uris uris    -> Some (to_regexp false (List.map to_string uris))
       in
       List.map to_param values
 
@@ -346,7 +351,7 @@ struct
   end
 
   let single_get dbh content_uri =
-    let params = Query.Util.param_generator Query.([String content_uri]) in
+    let params = Query.Util.param_generator Query.([Uri content_uri]) in
     lwt results = Pg.execute dbh QueryName.single_get params in
     if List.length results = 0 then raise Not_found
     else Lwt.return (Row.to_content (List.hd results))
@@ -377,7 +382,7 @@ struct
 
   let insert dbh content_uri title summary =
     let params = Query.Util.param_generator
-      Query.([String content_uri; String title; String summary])
+      Query.([Uri content_uri; String title; String summary])
     in
     lwt results = Pg.execute dbh QueryName.insert params in
     if List.length results = 0 then raise Not_found
@@ -385,15 +390,14 @@ struct
 
   let update dbh content_uri title summary =
     let params = Query.Util.param_generator
-      Query.([String content_uri; String title; String summary;
-              String content_uri])
+      Query.([Uri content_uri; String title; String summary; Uri content_uri])
     in
     lwt results = Pg.execute dbh QueryName.update params in
     if List.length results = 0 then raise Not_found
     else Lwt.return (Row.to_content_uri (List.hd results))
 
   let delete dbh content_uris =
-    let params = Query.Util.param_generator Query.([Strings content_uris]) in
+    let params = Query.Util.param_generator Query.([Uris content_uris]) in
     lwt results = Pg.execute dbh QueryName.delete params in
     Lwt.return (List.map Row.to_content_uri results)
 
@@ -414,19 +418,23 @@ let main () =
     with Not_found -> (print_endline "Empty"; Lwt.return ())
   in
 
+  let to_uri = Ptype.uri_of_string in
+
   let list_try func =
     lwt list = func () in
     if List.length list = 0 then print_endline "Empty";
     Lwt.return ()
   in
 
-  lwt () = unit_try (fun () -> Content.single_get dbh "http://patate.com") in
+  let patate_uri = to_uri "http://patate.com" in
 
-  lwt () = unit_try (fun () -> Content.delete dbh ["http://patate.com"]) in
+  lwt () = unit_try (fun () -> Content.single_get dbh patate_uri) in
 
-  lwt () = unit_try (fun () -> Content.insert dbh "http://patate.com" "patateee" "awesome") in
+  lwt () = unit_try (fun () -> Content.delete dbh [patate_uri]) in
 
-  lwt () = unit_try (fun () -> Content.update dbh "http://patate.com" "aubergine" "carotte") in
+  lwt () = unit_try (fun () -> Content.insert dbh patate_uri "patateee" "awesome") in
+
+  lwt () = unit_try (fun () -> Content.update dbh patate_uri "aubergine" "carotte") in
 
   lwt () = list_try (fun () -> Content.list_by_subject dbh ["patate"; "carotte"]) in
 
