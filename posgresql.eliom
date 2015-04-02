@@ -71,14 +71,14 @@ struct
 
   let prepare lwt_dbh name query =
     lwt dbh = lwt_dbh in
-    print_endline ("\nPrepare:: " ^ name);
-    print_endline query;
+    (* print_endline ("\nPrepare:: " ^ name); *)
+    (* print_endline query; *)
     PGOCaml.prepare dbh ~query ~name ()
 
   let execute lwt_dbh name params =
     lwt dbh = lwt_dbh in
-    print_endline ("\nExecute:: " ^ name);
-    List.iter (fun x -> match x with | Some x -> print_endline x | _ -> ()) params;
+    (* print_endline ("\nExecute:: " ^ name); *)
+    (* List.iter (fun x -> match x with | Some x -> print_endline x | _ -> ()) params; *)
     PGOCaml.execute dbh ~name ~params ()
 
 end
@@ -114,12 +114,12 @@ struct
   end
 
   let to_content_uri row =
-    Util.print 0 row;
+    (* Util.print 0 row; *)
     let () = Util.check_size row 1 "content_uri" in
     Ptype.uri_of_string (Util.get row "content.uri" 0)
 
   let to_content row =
-    Util.print 0 row;
+    (* Util.print 0 row; *)
     let () = Util.check_size row 3 "content" in
     let uri = Ptype.uri_of_string (Util.get row "content.uri" 0) in
     let title = Util.get row "content.title" 1 in
@@ -127,7 +127,7 @@ struct
     uri, title, summary
 
   let to_link row =
-    Util.print 0 row;
+    (* Util.print 0 row; *)
     let () = Util.check_size row 6 "link" in
     let id = int_of_string (Util.get row "link.id" 0) in
     let o_uri = Ptype.uri_of_string (Util.get row "link.origin_uri" 1) in
@@ -138,7 +138,7 @@ struct
     id, o_uri, t_uri, nature, mark, user_mark
 
   let to_tag row =
-    Util.print 0 row;
+    (* Util.print 0 row; *)
     let () = Util.check_size row 4 "tag" in
     let id = int_of_string (Util.get row "tag.id" 0) in
     let uri = Ptype.uri_of_string (Util.get row "tag.content_uri" 1) in
@@ -274,6 +274,19 @@ end
 module Content =
 struct
 
+  type t = (Ptype.uri * string * string)
+
+  let to_string (uri, title, summary) =
+    "(" ^ (String.concat ", " [Ptype.string_of_uri uri; title; summary]) ^ ")"
+
+  let print content =
+    print_endline (to_string content)
+
+  let compare (uri_1, title_1, summary_1) (uri_2, title_2, summary_2) =
+    Ptype.compare_uri uri_1 uri_2 +
+    String.compare title_1 title_2 +
+    String.compare summary_1 summary_2
+
   module QueryName =
   struct
     let single_get = "Content.Single-Get"
@@ -356,10 +369,10 @@ struct
        QueryName.delete,                      QueryGen.delete]
 
     let all dbh =
-      print_endline "Prepare:: All";
+      (* print_endline "Prepare:: All"; *)
       let aux (name, query_gen) = Pg.prepare dbh name (query_gen ()) in
       lwt () = Utils.Lwt_list.iter_s_exc aux list in
-      print_endline "Done\n";
+      (* print_endline "Done\n"; *)
       Lwt.return ()
 
   end
@@ -394,7 +407,7 @@ struct
     lwt results = Pg.execute dbh QueryName.search params in
     Lwt.return (List.map Row.to_content results)
 
-  let insert dbh content_uri title summary =
+  let insert dbh (content_uri, title, summary) =
     let params = Query.Util.param_generator
       Query.([Uri content_uri; String title; String summary])
     in
@@ -402,7 +415,7 @@ struct
     if List.length results = 0 then raise Not_found
     else Lwt.return (Row.to_content_uri (List.hd results))
 
-  let update dbh content_uri title summary =
+  let update dbh (content_uri, title, summary) =
     let params = Query.Util.param_generator
       Query.([Uri content_uri; String title; String summary; Uri content_uri])
     in
@@ -425,37 +438,106 @@ let connect () =
 let main () =
   let dbh = connect () in
 
-  let unit_try func =
-    try_lwt
-      lwt _ = func () in
-      Lwt.return ()
-    with Not_found -> (print_endline "Empty"; Lwt.return ())
-  in
-
   let to_uri = Ptype.uri_of_string in
 
-  let list_try func =
-    lwt list = func () in
-    if List.length list = 0 then print_endline "Empty";
+  let uri = to_uri "http://patate.com" in
+  let content_1 = (uri, "patateee", "awesome") in
+  let content_2 = (uri, "aubergine", "carotte") in
+
+  print_endline "\nUnitary tests of the PosgreSQL Module";
+
+  let succeed name =
+    print_endline ("Succeed ::\t"^name);
     Lwt.return ()
   in
 
-  let patate_uri = to_uri "http://patate.com" in
+  let failed name desc =
+    print_endline ("Failed  ::\t"^name);
+    print_endline desc;
+    lwt _ = Content.delete dbh [uri] in
+    exit 0
+  in
 
-  lwt () = unit_try (fun () -> Content.single_get dbh patate_uri) in
+  let wrap_try name func =
+    try_lwt
+      lwt _ = func name in
+      Lwt.return ()
+    with e -> failed name (Printexc.to_string e)
+  in
 
-  lwt () = unit_try (fun () -> Content.delete dbh [patate_uri]) in
+  let string_of_content_diff input output =
+    ("(input) " ^ Content.to_string input ^ " != " ^
+        "(output) " ^ Content.to_string output ^ "\n")
+  in
 
-  lwt () = unit_try (fun () -> Content.insert dbh patate_uri "patateee" "awesome") in
+  let string_of_uri_diff input output =
+    ("(input) " ^ Ptype.string_of_uri input ^ " != " ^
+        "(output) " ^ Ptype.string_of_uri output ^ "\n")
+  in
 
-  lwt () = unit_try (fun () -> Content.update dbh patate_uri "aubergine" "carotte") in
+  lwt _ =
+    try_lwt Content.delete dbh [uri]
+    with _ -> Lwt.return [uri]
+  in
 
-  lwt () = list_try (fun () -> Content.list_by_subject dbh ["patate"; "carotte"]) in
+  lwt () = wrap_try "Insert" (fun name ->
+    lwt uri' = Content.insert dbh content_1 in
+    lwt content' = Content.single_get dbh uri' in
+    if Content.compare content_1 content' != 0
+    then failed name (string_of_content_diff content_1 content')
+    else succeed name)
+  in
 
-  lwt () = list_try (fun () -> Content.search dbh ["tate"; "otte"]) in
+  lwt () = wrap_try "Update" (fun name ->
+    lwt uri' = Content.update dbh content_2 in
+    lwt content' = Content.single_get dbh uri' in
+    if Content.compare content_2 content' != 0
+    then failed name (string_of_content_diff content_2 content')
+    else succeed name)
+  in
+
+  lwt () = wrap_try "Get" (fun name ->
+    lwt content' = Content.single_get dbh uri in
+    if Content.compare content_2 content' != 0
+    then failed name (string_of_content_diff content_2 content')
+    else succeed name)
+  in
+
+  lwt () = wrap_try "List" (fun name ->
+    lwt contents = Content.list dbh in
+    if List.length contents == 0
+    then failed name "List.length == 0"
+    else succeed name)
+  in
+
+  lwt () = wrap_try "Search_by_title_and_summary" (fun name ->
+    lwt contents = Content.search_by_title_and_summary dbh ["ott"] in
+    if List.length contents == 0
+    then failed name "List.length == 0"
+    else succeed name)
+  in
+
+  lwt () = wrap_try "Search" (fun name ->
+    lwt contents = Content.search dbh ["aub"] in
+    if List.length contents == 0
+    then failed name "List.length == 0"
+    else succeed name)
+  in
+
+  lwt () = wrap_try "Delete" (fun name ->
+    lwt uri' = Utils.Lwt_list.hd (Content.delete dbh [uri]) in
+    lwt _ =
+      try_lwt Content.single_get dbh uri
+      with
+       | Not_found -> Lwt.return content_2
+       | _ -> failed name (Ptype.string_of_uri uri ^ ":: Not deleted")
+    in
+    if Ptype.compare_uri uri uri' != 0
+    then failed name (string_of_uri_diff uri uri')
+    else succeed name)
+  in
 
   print_endline "Done";
-
   Pg.close dbh
 
 lwt () = main ()
