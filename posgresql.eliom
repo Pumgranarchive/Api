@@ -45,7 +45,7 @@ struct
   struct
     let content = ["content_uri"; "title"; "summary"]
     let link = ["origin_uri"; "target_uri"; "nature"; "mark"; "user_mark"]
-    let tag = ["content_uri"; "subject"; "mark"]
+    let tag = ["tag_id"; "content_uri"; "subject"; "mark"]
   end
 
 end
@@ -200,21 +200,22 @@ struct
 
     let param_generator values =
       let to_string = Ptype.string_of_uri in
-      let to_regexp modulo strs =
-        let regexp = String.concat "" ["("; (String.concat "|" strs); ")"] in
-        if modulo then String.concat "" ["%"; regexp; "%"] else regexp
+      let to_regexp strict strs =
+        let lower_strs = List.map String.lowercase strs in
+        let regexp = "(" ^ (String.concat "|" lower_strs) ^ ")" in
+        if strict then regexp else "%"^regexp^"%"
       in
       let to_list strs = String.concat ", " strs in
       let to_param = function
         | String str   -> Some str
-        | Strings strs -> Some (to_list strs)
-        | Words wds    -> Some (to_regexp true wds)
+        | Strings strs -> Some (to_regexp true strs)
+        | Words wds    -> Some (to_regexp false wds)
         | Uri uri      -> Some (to_string uri)
-        | Uris uris    -> Some (to_list (List.map to_string uris))
+        | Uris uris    -> Some (to_regexp true (List.map to_string uris))
         | Float f      -> Some (string_of_float f)
         | Int i        -> Some (string_of_int i)
         | Id id        -> Some (string_of_int id)
-        | Ids ids      -> Some (to_list (List.map string_of_int ids))
+        | Ids ids      -> Some (to_regexp true (List.map string_of_int ids))
       in
       List.map to_param values
 
@@ -230,10 +231,12 @@ struct
       "(" ^ str ^ ")"
 
     let where_generator value_num conditions =
-      let where_value_gen where op value_num =
+      let where_value_gen where name op value_num =
         let dollar = dollar_generator value_num 1 in
-        where ^^ op ^^ dollar, value_num + 1
+        where ^^ name ^^ op ^^ dollar, value_num + 1
       in
+      let lower str = "LOWER("^str^")" in
+      let as_text str = lower ("CAST("^str^" AS text)") in
       let aux (where, value_num) (operator, name, value_type) =
         let length = String.length where in
         if length = 0 && operator != None
@@ -241,12 +244,12 @@ struct
         if length > 0 && operator = None
         then raise (Invalid_argument "Only the first operator should be None");
         let sep = string_of_operator operator in
-        let where = where ^ sep ^ name in
+        let where = where ^ sep in
         match value_type with
-        | Depend dep -> where ^ " = " ^ dep, value_num
-        | Value      -> where_value_gen where "IN" value_num
-        | Values     -> where_value_gen where "IN" value_num
-        | Regexp     -> where_value_gen where "SIMILAR TO" value_num
+        | Depend dep -> where ^ name ^ " = " ^ dep, value_num
+        | Value      -> where_value_gen where name "IN" value_num
+        | Values     -> where_value_gen where (as_text name) "SIMILAR TO" value_num
+        | Regexp     -> where_value_gen where (lower name) "SIMILAR TO" value_num
       in
       let where, _ = List.fold_left aux ("", value_num + 1) conditions in
       if String.length where = 0 then "" else " WHERE " ^ where
@@ -542,17 +545,17 @@ struct
     lwt results = Pg.execute dbh QueryName.list_by_content_uri params in
     Lwt.return (List.map Row.to_tag results)
 
-  let insert dbh (content_uri, subject, mark) =
+  let insert dbh (id, content_uri, subject, mark) =
     let params = Query.Util.param_generator
-      Query.([Uri content_uri; String subject; Float mark])
+      Query.([Id id; Uri content_uri; String subject; Float mark])
     in
     lwt results = Pg.execute dbh QueryName.insert params in
     if List.length results = 0 then raise Not_found
     else Lwt.return (Row.to_tag_id (List.hd results))
 
-  let update dbh id (content_uri, subject, mark) =
+  let update dbh (id, content_uri, subject, mark) =
     let params = Query.Util.param_generator
-      Query.([Uri content_uri; String subject; Float mark; Id id])
+      Query.([Id id; Uri content_uri; String subject; Float mark; Id id])
     in
     lwt results = Pg.execute dbh QueryName.update params in
     if List.length results = 0 then raise Not_found
@@ -577,7 +580,7 @@ let main () =
   let to_uri = Ptype.uri_of_string in
 
   let succeed name =
-    print_endline ("Succeed ::\t"^name);
+    print_endline ("Succeed   ::\t"^name);
     Lwt.return ()
   in
 
@@ -596,7 +599,8 @@ let main () =
   let content_2 = (uri, "aubergine", "carotte") in
 
   let failed name desc =
-    print_endline ("Failed  ::\t"^name);
+    print_endline ("Failed    ::\t"^name);
+    print_endline "Caused By ::";
     print_endline desc;
     lwt _ = Content.delete dbh [uri] in
     exit 0
@@ -660,12 +664,26 @@ let main () =
     else succeed name)
   in
 
-  let uri = to_uri "http://patate.com" in
-  let tag_1 = (uri, "Obama", 3.5) in
-  let subject = "Barack" in
-  let tag_2 = (uri, subject, 12.2) in
+ (*  lwt () = wrap_try "Content.Delete" (fun name -> *)
+ (*    lwt uri' = Utils.Lwt_list.hd (Content.delete dbh [uri]) in *)
+ (*    lwt _ = *)
+ (*      try_lwt Content.get dbh uri *)
+ (*      with *)
+ (*       | Not_found -> Lwt.return content_2 *)
+ (*       | _ -> failed name (Ptype.string_of_uri uri ^ ":: Is not deleted") *)
+ (*    in *)
+ (*    if Ptype.compare_uri uri uri' != 0 *)
+ (*    then failed name (string_of_uri_diff uri uri') *)
+ (*    else succeed name) *)
+ (* in *)
 
-  let add_id id (uri, subject, mark) = (id, uri, subject, mark) in
+  let origin_id = 1 in
+  let uri = to_uri "http://patate.com" in
+  let tag_1 = (origin_id, uri, "Obama", 3.5) in
+  let subject = "Barack" in
+  let tag_2 = (origin_id, uri, subject, 12.2) in
+
+  let add_id id (id', uri, subject, mark) = (id, uri, subject, mark) in
 
   let id = ref None in
 
@@ -677,9 +695,11 @@ let main () =
   in
 
   let failed name desc =
-    print_endline ("Failed  ::\t"^name);
+    print_endline ("Failed    ::\t"^name);
+    print_endline "Caused By ::";
     print_endline desc;
     lwt _ = Tag.delete dbh [get_id ()] in
+    lwt _ = Content.delete dbh [uri] in
     exit 0
   in
 
@@ -700,6 +720,7 @@ let main () =
         "(output) " ^ string_of_int output ^ "\n")
   in
 
+  (* let () = set_id origin_id in *)
   lwt () = wrap_try "Tag.Insert" (fun name ->
     lwt id' = Tag.insert dbh tag_1 in
     let () = set_id id' in
@@ -714,7 +735,7 @@ let main () =
   let full_tag_2 = add_id id tag_2 in
 
   lwt () = wrap_try "Tag.Update" (fun name ->
-    lwt id' = Tag.update dbh id tag_2 in
+    lwt id' = Tag.update dbh tag_2 in
     lwt tag' = Tag.get dbh id' in
     if Tag.compare full_tag_2 tag' != 0
     then failed name (string_of_tag_diff full_tag_2 tag')
@@ -782,6 +803,7 @@ let main () =
     else succeed name)
  in
 
-  Pg.close dbh
+ print_endline "Done";
+ Pg.close dbh
 
 lwt () = main ()
