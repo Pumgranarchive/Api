@@ -205,7 +205,6 @@ struct
         let regexp = "(" ^ (String.concat "|" lower_strs) ^ ")" in
         if strict then regexp else "%"^regexp^"%"
       in
-      let to_list strs = String.concat ", " strs in
       let to_param = function
         | String str   -> Some str
         | Strings strs -> Some (to_regexp true strs)
@@ -231,12 +230,12 @@ struct
       "(" ^ str ^ ")"
 
     let where_generator value_num conditions =
-      let where_value_gen where name op value_num =
+      let aux where name op value_num =
         let dollar = dollar_generator value_num 1 in
         where ^^ name ^^ op ^^ dollar, value_num + 1
       in
       let lower str = "LOWER("^str^")" in
-      let as_text str = lower ("CAST("^str^" AS text)") in
+      let as_text str = "CAST("^str^" AS text)" in
       let aux (where, value_num) (operator, name, value_type) =
         let length = String.length where in
         if length = 0 && operator != None
@@ -247,24 +246,29 @@ struct
         let where = where ^ sep in
         match value_type with
         | Depend dep -> where ^ name ^ " = " ^ dep, value_num
-        | Value      -> where_value_gen where name "IN" value_num
-        | Values     -> where_value_gen where (as_text name) "SIMILAR TO" value_num
-        | Regexp     -> where_value_gen where (lower name) "SIMILAR TO" value_num
+        | Value      -> aux where name "IN" value_num
+        | Values     -> aux where (lower (as_text name)) "SIMILAR TO" value_num
+        | Regexp     -> aux where (lower name) "SIMILAR TO" value_num
       in
       let where, _ = List.fold_left aux ("", value_num + 1) conditions in
       if String.length where = 0 then "" else " WHERE " ^ where
 
+    let order_generator order_key =
+      try " ORDER BY " ^ BatOption.get order_key
+      with _ -> ""
+
   end
 
-  let select format tables conditions group_key max_size =
+  let select format tables conditions group_key ?order_key max_size =
     if List.length tables < 1
     then raise (Invalid_argument "from table could not be null");
     let select = "SELECT " ^ (Util.string_of_format format) in
     let from = " FROM " ^ (String.concat ", " tables) in
     let where = Util.where_generator 0 conditions in
     let group_by = " GROUP BY " ^ group_key in
+    let order_by = Util.order_generator order_key in
     let limit = " LIMIT " ^ (string_of_int max_size) in
-    select ^ from ^ where ^ group_by ^ limit
+    select ^ from ^ where ^ group_by ^ order_by ^ limit
 
   let insert format table returns =
     let str_format = Util.string_of_format format in
@@ -346,8 +350,9 @@ struct
         Query.([(None, "content.content_uri", Depend "tag.content_uri");
                 (And, "subject", Values)])
       in
+      let order_key = "mark" in
       Query.select Format.To_get.content Table.([content; tag]) contitions
-        "content.content_uri" Conf.limit
+        "content.content_uri" ~order_key Conf.limit
 
     let search_by_title_and_summary () =
       let contitions = Query.([(None, "title", Regexp); (Or, "summary", Regexp)]) in
@@ -359,8 +364,9 @@ struct
         Query.([(None, "content.content_uri", Depend "tag.content_uri");
                 (And, "subject", Regexp)])
       in
+      let order_key = "mark" in
       Query.select Format.To_get.content Table.([content; tag]) contitions
-        "content.content_uri" Conf.limit
+        "content.content_uri" ~order_key Conf.limit
 
     let search () =
       let query1 = search_by_title_and_summary () in
@@ -491,13 +497,15 @@ struct
         "tag_id" Conf.limit
 
     let list () =
+      let order_key = "mark" in
       Query.select Format.To_get.tag [Table.tag] []
-        "tag_id" Conf.limit
+        "tag_id" ~order_key Conf.limit
 
     let list_by_content_uri () =
       let contitions = Query.([(None, "content_uri", Values)]) in
+      let order_key = "mark" in
       Query.select Format.To_get.tag Table.([tag]) contitions
-        "tag_id" Conf.limit
+        "tag_id" ~order_key Conf.limit
 
     let insert () =
       let returns = ["tag_id"] in
