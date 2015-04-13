@@ -1,3 +1,15 @@
+module Maths =
+struct
+
+  let power number p =
+    let rec aux calc p =
+      if p <= 0. then calc
+      else aux (calc *. number) (p -. 1.)
+    in
+    aux 1. p
+
+end
+
 module Str =
 struct
 
@@ -128,7 +140,7 @@ module Opt =
 struct
 
   let get_not_null default = function
-    | None -> default
+    | None   -> default
     | Some x -> x
 
 end

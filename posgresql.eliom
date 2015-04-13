@@ -18,16 +18,18 @@ module PGOCaml = Lwt_PGOCaml
 
 module Table =
 struct
-
   let content = "content"
   let tag = "tag"
   let link = "link"
-
 end
 
 module Conf =
 struct
   let limit = 20
+  let limit_coef = 2
+  let mark_decimal = 3.
+  let internal_limit = limit * limit_coef
+  let mark_precision = Utils.Maths.power 10. mark_decimal
 end
 
 module Format =
@@ -38,6 +40,8 @@ struct
     let content = ["content.content_uri"; "title"; "summary"]
     let link = ["link_id"; "origin_uri"; "target_uri";
                 "nature"; "link.mark"; "user_mark"]
+    let linked_content = ["link_id"; "nature"; "link.mark"; "user_mark";
+                          "content.content_uri"; "title"; "summary"]
     let tag = ["tag_id"; "tag.content_uri"; "subject"; "tag.mark"]
   end
 
@@ -71,8 +75,8 @@ struct
 
   let prepare lwt_dbh name query =
     lwt dbh = lwt_dbh in
-    (* print_endline ("\nPrepare:: " ^ name); *)
-    (* print_endline query; *)
+    print_endline ("\nPrepare:: " ^ name);
+    print_endline query;
     PGOCaml.prepare dbh ~query ~name ()
 
   let prepare_list dbh list =
@@ -82,8 +86,8 @@ struct
 
   let execute lwt_dbh name params =
     lwt dbh = lwt_dbh in
-    (* print_endline ("\nExecute:: " ^ name); *)
-    (* List.iter (fun x -> match x with | Some x -> print_endline x | _ -> ()) params; *)
+    print_endline ("\nExecute:: " ^ name);
+    List.iter (fun x -> match x with | Some x -> print_endline x | _ -> ()) params;
     PGOCaml.execute dbh ~name ~params ()
 
 end
@@ -166,7 +170,7 @@ end
 module Query =
 struct
 
-  type where_type =
+  type where =
   | Depend of string
   | Value
   | Values
@@ -183,17 +187,21 @@ struct
   | Id of int
   | Ids of int list
 
-  type operator = None | And | Or
+  type order =
+  | ASC of string
+  | DESC of string
 
-  type condition = (operator * string * where_type) list
+  type operator = Nop | And | Or
+
+  type condition = (operator * string * where) list
 
   module Util =
   struct
 
     let string_of_operator = function
-      | None  -> ""
-      | And   -> " AND "
-      | Or    -> " OR "
+      | Nop  -> ""
+      | And   -> " AND"
+      | Or    -> " OR"
 
     let string_of_format format =
       String.concat ", " format
@@ -201,8 +209,8 @@ struct
     let param_generator values =
       let to_string = Ptype.string_of_uri in
       let to_regexp strict strs =
-        let lower_strs = List.map String.lowercase strs in
-        let regexp = "(" ^ (String.concat "|" lower_strs) ^ ")" in
+        let strs' = if strict then strs else List.map String.lowercase strs in
+        let regexp = "(" ^ (String.concat "|" strs') ^ ")" in
         if strict then regexp else "%"^regexp^"%"
       in
       let to_param = function
@@ -238,65 +246,85 @@ struct
       let as_text str = "CAST("^str^" AS text)" in
       let aux (where, value_num) (operator, name, value_type) =
         let length = String.length where in
-        if length = 0 && operator != None
+        if length = 0 && operator != Nop
         then raise (Invalid_argument "The first operator should be None");
-        if length > 0 && operator = None
+        if length > 0 && operator = Nop
         then raise (Invalid_argument "Only the first operator should be None");
         let sep = string_of_operator operator in
         let where = where ^ sep in
         match value_type with
-        | Depend dep -> where ^ name ^ " = " ^ dep, value_num
+        | Depend dep -> where ^^ name ^^ "=" ^^ dep, value_num
         | Value      -> aux where name "IN" value_num
-        | Values     -> aux where (lower (as_text name)) "SIMILAR TO" value_num
+        | Values     -> aux where (as_text name) "SIMILAR TO" value_num
         | Regexp     -> aux where (lower name) "SIMILAR TO" value_num
       in
       let where, _ = List.fold_left aux ("", value_num + 1) conditions in
-      if String.length where = 0 then "" else " WHERE " ^ where
+      if String.length where = 0 then "" else "WHERE" ^ where
 
-    let order_generator order_key =
-      try " ORDER BY " ^ BatOption.get order_key
-      with _ -> ""
+    let distinct_generator = function
+      | None -> ""
+      | Some keys ->
+        if List.length keys == 0 then ""
+        else "DISTINCT ON ("^(String.concat ", " keys)^")"
+
+    let group_generator = function
+      | None -> ""
+      | Some keys ->
+        if List.length keys == 0 then ""
+        else "GROUP BY" ^^ (String.concat ", " keys)
+
+    let string_of_order = function
+      | ASC key  -> key ^^ "ASC"
+      | DESC key -> key ^^ "DESC"
+
+    let order_generator = function
+      | None -> ""
+      | Some keys ->
+        if List.length keys == 0 then ""
+        else "ORDER BY" ^^ (String.concat ", " (List.map string_of_order keys))
 
   end
 
-  let select format tables conditions group_key ?order_key max_size =
+  let select ?distinct_keys format tables conditions ?group_keys ?order_keys
+      max_size =
     if List.length tables < 1
     then raise (Invalid_argument "from table could not be null");
-    let select = "SELECT " ^ (Util.string_of_format format) in
-    let from = " FROM " ^ (String.concat ", " tables) in
+    let distinct = Util.distinct_generator distinct_keys in
+    let select = "SELECT" ^^ distinct ^^ (Util.string_of_format format) in
+    let from = "FROM" ^^ (String.concat ", " tables) in
     let where = Util.where_generator 0 conditions in
-    let group_by = " GROUP BY " ^ group_key in
-    let order_by = Util.order_generator order_key in
-    let limit = " LIMIT " ^ (string_of_int max_size) in
-    select ^ from ^ where ^ group_by ^ order_by ^ limit
+    let group_by = Util.group_generator group_keys in
+    let order_by = Util.order_generator order_keys in
+    let limit = "LIMIT" ^^ (string_of_int max_size) in
+    select ^^ from ^^ where ^^ group_by ^^ order_by ^^ limit
 
   let insert format table returns =
     let str_format = Util.string_of_format format in
-    let insert = "INSERT INTO "^table^" ("^str_format^")" in
-    let values = " VALUES " ^ (Util.dollar_generator 1 (List.length format)) in
-    let returning = " RETURNING " ^ (String.concat ", " returns) in
-    insert ^ values ^ returning
+    let insert = "INSERT INTO"^^table^^"("^str_format^")" in
+    let values = "VALUES" ^^ (Util.dollar_generator 1 (List.length format)) in
+    let returning = "RETURNING" ^^ (String.concat ", " returns) in
+    insert ^^ values ^^ returning
 
   let update format table conditions returns =
-    let update = "UPDATE " ^ table in
+    let update = "UPDATE" ^^ table in
     let format_length = List.length format in
     let str_format = Util.string_of_format format in
     let dollars = (Util.dollar_generator 1 format_length) in
-    let values = " SET (" ^  str_format ^ ") = " ^ dollars in
+    let values = " SET (" ^  str_format ^ ") =" ^^ dollars in
     let where = Util.where_generator format_length conditions in
-    let returning = " RETURNING " ^ (String.concat ", " returns) in
-    update ^ values ^ where ^ returning
+    let returning = "RETURNING" ^^ (String.concat ", " returns) in
+    update ^^ values ^^ where ^^ returning
 
   let delete table conditions returns =
-    let delete = "DELETE FROM " ^ table in
+    let delete = "DELETE FROM" ^^ table in
     let where = Util.where_generator 0 conditions in
-    let returning = " RETURNING " ^ (String.concat ", " returns) in
-    delete ^ where ^ returning
+    let returning = "RETURNING" ^^ (String.concat ", " returns) in
+    delete ^^ where ^^ returning
 
   let union query1 query2 max_size =
     let union = "(" ^ query1 ^") UNION (" ^ query2 ^ ")" in
-    let limit = " LIMIT " ^ (string_of_int max_size) in
-    union ^ limit
+    let limit = "LIMIT" ^^ (string_of_int max_size) in
+    union ^^ limit
 
 end
 
@@ -337,53 +365,59 @@ struct
   struct
 
     let get () =
-      let contitions = Query.([(None, "content_uri", Value)]) in
+      let contitions = Query.([(Nop, "content_uri", Value)]) in
+      let group_keys = ["content_uri"] in
       Query.select Format.To_get.content [Table.content] contitions
-        "content_uri" Conf.limit
+        ~group_keys Conf.internal_limit
 
     let list () =
+      let group_keys = ["content_uri"] in
       Query.select Format.To_get.content [Table.content] []
-        "content_uri" Conf.limit
+        ~group_keys Conf.internal_limit
 
     let list_by_subject () =
+      (* "SELECT content.content_uri, title, summary FROM content, tag WHERE content.content_uri = tag.content_uri AND CAST(subject AS text) SIMILAR TO ($1) ORDER BY mark DESC LIMIT 20" *)
       let contitions =
-        Query.([(None, "content.content_uri", Depend "tag.content_uri");
+        Query.([(Nop, "content.content_uri", Depend "tag.content_uri");
                 (And, "subject", Values)])
       in
-      let order_key = "mark" in
+      let group_keys = ["content.content_uri"] in
+      let order_keys = Query.([DESC "max(mark)"]) in
       Query.select Format.To_get.content Table.([content; tag]) contitions
-        "content.content_uri" ~order_key Conf.limit
+        ~group_keys ~order_keys Conf.internal_limit
 
     let search_by_title_and_summary () =
-      let contitions = Query.([(None, "title", Regexp); (Or, "summary", Regexp)]) in
+      let contitions = Query.([(Nop, "title", Regexp); (Or, "summary", Regexp)]) in
+      let group_keys = ["content_uri"] in
       Query.select Format.To_get.content Table.([content]) contitions
-        "content_uri" Conf.limit
+        ~group_keys Conf.internal_limit
 
     let search_by_subject () =
       let contitions =
-        Query.([(None, "content.content_uri", Depend "tag.content_uri");
+        Query.([(Nop, "content.content_uri", Depend "tag.content_uri");
                 (And, "subject", Regexp)])
       in
-      let order_key = "mark" in
+      let group_keys = ["content.content_uri"] in
+      let order_keys = Query.([DESC "max(mark)"]) in
       Query.select Format.To_get.content Table.([content; tag]) contitions
-        "content.content_uri" ~order_key Conf.limit
+        ~group_keys ~order_keys Conf.internal_limit
 
     let search () =
       let query1 = search_by_title_and_summary () in
       let query2 = search_by_subject () in
-      Query.union query1 query2 Conf.limit
+      Query.union query1 query2 Conf.internal_limit
 
     let insert () =
       let returns = ["content_uri"] in
       Query.insert Format.To_set.content Table.content returns
 
     let update () =
-      let contitions = Query.([(None, "content_uri", Value)]) in
+      let contitions = Query.([(Nop, "content_uri", Value)]) in
       let returns = ["content_uri"] in
       Query.update Format.To_set.content Table.content contitions returns
 
     let delete () =
-      let contitions = Query.([(None, "content_uri", Values)]) in
+      let contitions = Query.([(Nop, "content_uri", Values)]) in
       let returns = ["content_uri"] in
       Query.delete Table.content contitions returns
 
@@ -460,6 +494,10 @@ struct
 
 end
 
+(******************************************************************************
+************************************* Tag *************************************
+*******************************************************************************)
+
 module Tag =
 struct
 
@@ -476,7 +514,7 @@ struct
     id_1 - id_2 +
     Ptype.compare_uri uri_1 uri_2 +
     String.compare subject_1 subject_2 +
-    int_of_float (mark_1 -. mark_2)
+    int_of_float ((mark_1 -. mark_2) *. Conf.mark_precision)
 
   module QueryName =
   struct
@@ -492,32 +530,35 @@ struct
   struct
 
     let get () =
-      let contitions = Query.([(None, "tag_id", Value)]) in
+      let contitions = Query.([(Nop, "tag_id", Value)]) in
+      let group_keys = ["tag_id"] in
       Query.select Format.To_get.tag [Table.tag] contitions
-        "tag_id" Conf.limit
+        ~group_keys Conf.internal_limit
 
     let list () =
-      let order_key = "mark" in
+      let group_keys = ["tag_id"] in
+      let order_keys = Query.([DESC "mark"]) in
       Query.select Format.To_get.tag [Table.tag] []
-        "tag_id" ~order_key Conf.limit
+        ~group_keys ~order_keys Conf.internal_limit
 
     let list_by_content_uri () =
-      let contitions = Query.([(None, "content_uri", Values)]) in
-      let order_key = "mark" in
+      let contitions = Query.([(Nop, "content_uri", Values)]) in
+      let group_keys = ["tag_id"] in
+      let order_keys = Query.([DESC "mark"]) in
       Query.select Format.To_get.tag Table.([tag]) contitions
-        "tag_id" ~order_key Conf.limit
+        ~group_keys ~order_keys Conf.internal_limit
 
     let insert () =
       let returns = ["tag_id"] in
       Query.insert Format.To_set.tag Table.tag returns
 
     let update () =
-      let contitions = Query.([(None, "tag_id", Value)]) in
+      let contitions = Query.([(Nop, "tag_id", Value)]) in
       let returns = ["tag_id"] in
       Query.update Format.To_set.tag Table.tag contitions returns
 
     let delete () =
-      let contitions = Query.([(None, "tag_id", Values)]) in
+      let contitions = Query.([(Nop, "tag_id", Values)]) in
       let returns = ["tag_id"] in
       Query.delete Table.tag contitions returns
 
@@ -527,10 +568,10 @@ struct
   struct
 
     let list =
-      [QueryName.insert,                      QueryGen.insert;
-       QueryName.get,                         QueryGen.get;
+      [QueryName.get,                         QueryGen.get;
        QueryName.list,                        QueryGen.list;
        QueryName.list_by_content_uri,         QueryGen.list_by_content_uri;
+       QueryName.insert,                      QueryGen.insert;
        QueryName.update,                      QueryGen.update;
        QueryName.delete,                      QueryGen.delete]
 
@@ -576,11 +617,218 @@ struct
 
 end
 
+(******************************************************************************
+************************************* Link ************************************
+*******************************************************************************)
+
+module Link =
+struct
+
+  type t = (int * Ptype.uri * Ptype.uri * string * float * float)
+
+  let to_string (id, origin_uri, target_uri, nature, mark, user_mark) =
+    "("^(string_of_int id)^", "^
+      (Ptype.string_of_uri origin_uri)^", "^
+      (Ptype.string_of_uri target_uri)^", "^
+      nature^", "^
+      (string_of_float mark)^", "^
+      (string_of_float user_mark)^")"
+
+  let print link =
+    print_endline (to_string link)
+
+  let compare
+      (id_1, origin_uri_1, target_uri_1, nature_1, mark_1, user_mark_1)
+      (id_2, origin_uri_2, target_uri_2, nature_2, mark_2, user_mark_2) =
+    id_1 - id_2 +
+    Ptype.compare_uri origin_uri_1 origin_uri_2 +
+    Ptype.compare_uri target_uri_1 target_uri_2 +
+    String.compare nature_1 nature_2 +
+    int_of_float ((mark_1 -. mark_2) *. Conf.mark_precision) +
+    int_of_float ((user_mark_1 -. user_mark_2) *. Conf.mark_precision)
+
+  module QueryName =
+  struct
+    let tmp_try = "Link.Tmp-Try"
+    let get = "Link.Get"
+    let list = "Link.List"
+    let list_by_content_uri = "Link.List-By-Content-Uri"
+    let list_by_content_tag = "Link.List-By-Content-Tag"
+    let search = "Link.Search"
+    let insert = "Link.Insert"
+    let update = "Link.Update"
+    let delete = "Link.Delete"
+  end
+
+  module QueryGen =
+  struct
+
+    let tmp_try () =
+      "SELECT DISTINCT ON (target_uri) link_id, target_uri, nature, mark, user_mark FROM link ORDER BY target_uri DESC, mark DESC LIMIT 20"
+
+    let get () =
+      let contitions =
+        Query.([(Nop, "content.content_uri", Depend "link.target_uri");
+                (And, "link_id", Value)])
+      in
+      let tables = Table.([link; content]) in
+      Query.select Format.To_get.linked_content tables contitions
+        Conf.internal_limit
+
+    let list () =
+      let contitions =
+        Query.([(Nop, "content.content_uri", Depend "link.target_uri")])
+      in
+      let distinct_keys = Query.(["content.content_uri"]) in
+      let tables = Table.([link; content]) in
+      let order_keys = Query.([DESC "content.content_uri"; DESC "link.mark"]) in
+      Query.select ~distinct_keys Format.To_get.linked_content tables contitions
+        ~order_keys Conf.internal_limit
+
+    let list_by_content_uri () =
+      let contitions =
+        Query.([(Nop, "content.content_uri", Depend "link.target_uri");
+                (And, "origin_uri", Value)])
+      in
+      let distinct_keys = Query.(["content.content_uri"]) in
+      let tables = Table.([link; content]) in
+      let order_keys = Query.([DESC "content.content_uri"; DESC "link.mark"]) in
+      Query.select ~distinct_keys Format.To_get.linked_content tables contitions
+        ~order_keys Conf.internal_limit
+
+    let list_by_content_tag () =
+      let contitions =
+        Query.([(Nop, "content.content_uri", Depend "link.target_uri");
+                (And, "tag.content_uri", Depend "link.target_uri");
+                (And, "origin_uri", Value);
+                (And, "subject", Values)])
+      in
+      let distinct_keys = Query.(["content.content_uri"]) in
+      let order_keys = Query.([DESC "content.content_uri"; DESC "link.mark"]) in
+      let tables = Table.([link; content; tag]) in
+      Query.select ~distinct_keys Format.To_get.linked_content tables contitions
+        ~order_keys Conf.internal_limit
+
+    let search () =
+      let contitions =
+        Query.([(Nop, "tag.content_uri", Depend "link.target_uri");
+                (And, "content.content_uri", Depend "link.target_uri");
+                (And, "origin_uri", Value);
+                (And, "subject", Regexp);
+                (Or, "title", Regexp);
+                (Or, "summary", Regexp)])
+      in
+      let distinct_keys = Query.(["content.content_uri"]) in
+      let order_keys = Query.([DESC "content.content_uri"; DESC "link.mark"]) in
+      let tables = Table.([link; content; tag]) in
+      Query.select ~distinct_keys Format.To_get.linked_content tables contitions
+        ~order_keys Conf.internal_limit
+
+    let insert () =
+      let returns = ["link_id"] in
+      Query.insert Format.To_set.link Table.link returns
+
+    let update () =
+      let contitions = Query.([(Nop, "link_id", Value)]) in
+      let returns = ["link_id"] in
+      Query.update Format.To_set.link Table.link contitions returns
+
+    let delete () =
+      let contitions = Query.([(Nop, "link_id", Values)]) in
+      let returns = ["link_id"] in
+      Query.delete Table.link contitions returns
+
+  end
+
+  module Prepare =
+  struct
+
+    let list =
+      [QueryName.tmp_try,                     QueryGen.tmp_try;
+       QueryName.get,                         QueryGen.get;
+       QueryName.list,                        QueryGen.list;
+       QueryName.list_by_content_uri,         QueryGen.list_by_content_uri;
+       QueryName.list_by_content_tag,         QueryGen.list_by_content_tag;
+       QueryName.search,                      QueryGen.search;
+       QueryName.insert,                      QueryGen.insert;
+       QueryName.update,                      QueryGen.update;
+       QueryName.delete,                      QueryGen.delete]
+
+    let all dbh = Pg.prepare_list dbh list
+
+  end
+
+  let get dbh link_id =
+    let params = Query.Util.param_generator Query.([Id link_id]) in
+    lwt results = Pg.execute dbh QueryName.get params in
+    if List.length results = 0 then raise Not_found
+    else Lwt.return (Row.to_link (List.hd results))
+
+  let list dbh =
+    lwt results = Pg.execute dbh QueryName.list [] in
+    Lwt.return (List.map Row.to_link results)
+
+  let list_by_content_uri dbh content_uri =
+    let params = Query.Util.param_generator Query.([Uri content_uri]) in
+    lwt results = Pg.execute dbh QueryName.list_by_content_uri params in
+    Lwt.return (List.map Row.to_link results)
+
+  let list_by_content_tag dbh content_uri subjects =
+    let params = Query.Util.param_generator Query.([Uri content_uri;
+                                                    Strings subjects])
+    in
+    lwt results = Pg.execute dbh QueryName.list_by_content_tag params in
+    Lwt.return (List.map Row.to_link results)
+
+  let search dbh content_uri research =
+    let params = Query.Util.param_generator Query.([Uri content_uri;
+                                                    Words research;
+                                                    Words research;
+                                                    Words research])
+    in
+    lwt results = Pg.execute dbh QueryName.search params in
+    Lwt.return (List.map Row.to_link results)
+
+  let insert dbh (id, origin_uri, target_uri, nature, mark, user_mark) =
+    let params = Query.Util.param_generator
+      Query.([Id id; Uri origin_uri; Uri target_uri; String nature;
+              Float mark; Float user_mark])
+    in
+    lwt results = Pg.execute dbh QueryName.insert params in
+    if List.length results = 0 then raise Not_found
+    else Lwt.return (Row.to_link_id (List.hd results))
+
+  let update dbh (id, origin_uri, target_uri, nature, mark, user_mark) =
+    let params = Query.Util.param_generator
+      Query.([Id id; Uri origin_uri; Uri target_uri; String nature;
+              Float mark; Float user_mark; Id id])
+    in
+    lwt results = Pg.execute dbh QueryName.update params in
+    if List.length results = 0 then raise Not_found
+    else Lwt.return (Row.to_link_id (List.hd results))
+
+  let delete dbh link_ids =
+    let params = Query.Util.param_generator Query.([Ids link_ids]) in
+    lwt results = Pg.execute dbh QueryName.delete params in
+    Lwt.return (List.map Row.to_link_id results)
+
+end
+
+(******************************************************************************
+********************************** Functions **********************************
+*******************************************************************************)
+
+let module_prepare = [Content.Prepare.all; Tag.Prepare.all; Link.Prepare.all]
+
 let connect () =
   let dbh = Pg.connect () in
-  lwt () = Content.Prepare.all dbh in
-  lwt () = Tag.Prepare.all dbh in
+  let prepare prepare_fun = prepare_fun dbh in
+  lwt () = Utils.Lwt_list.iter_s_exc prepare module_prepare in
   dbh
+
+(******************************************************************************
+******************************** Unitary tests ********************************
+*******************************************************************************)
 
 let main () =
   let dbh = connect () in
