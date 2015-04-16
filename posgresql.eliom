@@ -647,10 +647,9 @@ end
 module Link =
 struct
 
-  type link = (int * Ptype.uri * Ptype.uri * string * float * float)
-  type linked_content = (int * string * float * float * Ptype.uri * string * string)
+  type t = (int * Ptype.uri * Ptype.uri * string * float * float)
 
-  let link_to_string (id, origin_uri, target_uri, nature, mark, user_mark) =
+  let to_string (id, origin_uri, target_uri, nature, mark, user_mark) =
     "("^(string_of_int id)^", "^
       (Ptype.string_of_uri origin_uri)^", "^
       (Ptype.string_of_uri target_uri)^", "^
@@ -658,10 +657,10 @@ struct
       (string_of_float mark)^", "^
       (string_of_float user_mark)^")"
 
-  let print_link link =
-    print_endline (link_to_string link)
+  let print link =
+    print_endline (to_string link)
 
-  let compare_link
+  let compare
       (id_1, origin_uri_1, target_uri_1, nature_1, mark_1, user_mark_1)
       (id_2, origin_uri_2, target_uri_2, nature_2, mark_2, user_mark_2) =
     id_1 - id_2 +
@@ -671,8 +670,80 @@ struct
     int_of_float ((mark_1 -. mark_2) *. Conf.mark_precision) +
     int_of_float ((user_mark_1 -. user_mark_2) *. Conf.mark_precision)
 
+  module QueryName =
+  struct
+    let insert = "Link.Insert"
+    let update = "Link.Update"
+    let delete = "Link.Delete"
+  end
 
-  let linked_content_to_string
+  module QueryGen =
+  struct
+
+    let insert () =
+      let first_default = true in
+      let returns = ["link_id"] in
+      Query.insert ~first_default Format.To_set.link Table.link returns
+
+    let update () =
+      let contitions = Query.([(Nop, "link_id", Value)]) in
+      let returns = ["link_id"] in
+      Query.update Format.To_set.link Table.link contitions returns
+
+    let delete () =
+      let contitions = Query.([(Nop, "link_id", Values)]) in
+      let returns = ["link_id"] in
+      Query.delete Table.link contitions returns
+
+  end
+
+  module Prepare =
+  struct
+
+    let list =
+      [QueryName.insert,                      QueryGen.insert;
+       QueryName.update,                      QueryGen.update;
+       QueryName.delete,                      QueryGen.delete]
+
+    let all dbh = Pg.prepare_list dbh list
+
+  end
+
+  let insert dbh (origin_uri, target_uri, nature, mark, user_mark) =
+    let params = Query.Util.param_generator
+      Query.([Uri origin_uri; Uri target_uri; String nature;
+              Float mark; Float user_mark])
+    in
+    lwt results = Pg.execute dbh QueryName.insert params in
+    if List.length results = 0 then raise Not_found
+    else Lwt.return (Row.to_link_id (List.hd results))
+
+  let update dbh id (origin_uri, target_uri, nature, mark, user_mark) =
+    let params = Query.Util.param_generator
+      Query.([Id id; Uri origin_uri; Uri target_uri; String nature;
+              Float mark; Float user_mark; Id id])
+    in
+    lwt results = Pg.execute dbh QueryName.update params in
+    if List.length results = 0 then raise Not_found
+    else Lwt.return (Row.to_link_id (List.hd results))
+
+  let delete dbh link_ids =
+    let params = Query.Util.param_generator Query.([Ids link_ids]) in
+    lwt results = Pg.execute dbh QueryName.delete params in
+    Lwt.return (List.map Row.to_link_id results)
+
+end
+
+(******************************************************************************
+******************************** Linked Content *******************************
+*******************************************************************************)
+
+module LinkedContent =
+struct
+
+  type t = (int * string * float * float * Ptype.uri * string * string)
+
+  let to_string
       (id, nature, mark, user_mark, uri, title, summary) =
     "("^(string_of_int id)^", "^
       nature^", "^
@@ -682,10 +753,10 @@ struct
       title^", "^
       summary^")"
 
-  let print_linked_content linked_content =
-    print_endline (linked_content_to_string linked_content)
+  let print linked_content =
+    print_endline (to_string linked_content)
 
-  let compare_linked_content
+  let compare
       (id_1, nature_1, mark_1, user_mark_1, uri_1, title_1, summary_1)
       (id_2, nature_2, mark_2, user_mark_2, uri_2, title_2, summary_2) =
     id_1 - id_2 +
@@ -698,14 +769,11 @@ struct
 
   module QueryName =
   struct
-    let get = "Link.Get"
-    let list = "Link.List"
-    let list_by_content_uri = "Link.List-By-Content-Uri"
-    let list_by_content_tag = "Link.List-By-Content-Tag"
-    let search = "Link.Search"
-    let insert = "Link.Insert"
-    let update = "Link.Update"
-    let delete = "Link.Delete"
+    let get = "LinkedContent.Get"
+    let list = "LinkedContent.List"
+    let list_by_content_uri = "LinkedContent.List-By-Content-Uri"
+    let list_by_content_tag = "LinkedContent.List-By-Content-Tag"
+    let search = "LinkedContent.Search"
   end
 
   module QueryGen =
@@ -769,21 +837,6 @@ struct
       Query.select ~distinct_keys Format.To_get.linked_content tables contitions
         ~order_keys Conf.internal_limit
 
-    let insert () =
-      let first_default = true in
-      let returns = ["link_id"] in
-      Query.insert ~first_default Format.To_set.link Table.link returns
-
-    let update () =
-      let contitions = Query.([(Nop, "link_id", Value)]) in
-      let returns = ["link_id"] in
-      Query.update Format.To_set.link Table.link contitions returns
-
-    let delete () =
-      let contitions = Query.([(Nop, "link_id", Values)]) in
-      let returns = ["link_id"] in
-      Query.delete Table.link contitions returns
-
   end
 
   module Prepare =
@@ -794,10 +847,7 @@ struct
        QueryName.list,                        QueryGen.list;
        QueryName.list_by_content_uri,         QueryGen.list_by_content_uri;
        QueryName.list_by_content_tag,         QueryGen.list_by_content_tag;
-       QueryName.search,                      QueryGen.search;
-       QueryName.insert,                      QueryGen.insert;
-       QueryName.update,                      QueryGen.update;
-       QueryName.delete,                      QueryGen.delete]
+       QueryName.search,                      QueryGen.search]
 
     let all dbh = Pg.prepare_list dbh list
 
@@ -834,36 +884,14 @@ struct
     lwt results = Pg.execute dbh QueryName.search params in
     Lwt.return (List.map Row.to_linked_content results)
 
-  let insert dbh (origin_uri, target_uri, nature, mark, user_mark) =
-    let params = Query.Util.param_generator
-      Query.([Uri origin_uri; Uri target_uri; String nature;
-              Float mark; Float user_mark])
-    in
-    lwt results = Pg.execute dbh QueryName.insert params in
-    if List.length results = 0 then raise Not_found
-    else Lwt.return (Row.to_link_id (List.hd results))
-
-  let update dbh id (origin_uri, target_uri, nature, mark, user_mark) =
-    let params = Query.Util.param_generator
-      Query.([Id id; Uri origin_uri; Uri target_uri; String nature;
-              Float mark; Float user_mark; Id id])
-    in
-    lwt results = Pg.execute dbh QueryName.update params in
-    if List.length results = 0 then raise Not_found
-    else Lwt.return (Row.to_link_id (List.hd results))
-
-  let delete dbh link_ids =
-    let params = Query.Util.param_generator Query.([Ids link_ids]) in
-    lwt results = Pg.execute dbh QueryName.delete params in
-    Lwt.return (List.map Row.to_link_id results)
-
 end
 
 (******************************************************************************
 ********************************** Functions **********************************
 *******************************************************************************)
 
-let mfun_prepare = [Content.Prepare.all; Tag.Prepare.all; Link.Prepare.all]
+let mfun_prepare = [Content.Prepare.all; Tag.Prepare.all;
+                    Link.Prepare.all; LinkedContent.Prepare.all]
 
 let connect () =
   let dbh = Pg.connect () in
@@ -1118,8 +1146,8 @@ let main () =
   in
 
   let string_of_link_diff input output =
-    ("(input) " ^ Link.linked_content_to_string input ^ " != " ^
-        "(output) " ^ Link.linked_content_to_string output ^ "\n")
+    ("(input) " ^ LinkedContent.to_string input ^ " != " ^
+        "(output) " ^ LinkedContent.to_string output ^ "\n")
   in
 
   lwt () = wrap_try "Link.Insert" (fun name ->
@@ -1128,9 +1156,9 @@ let main () =
     lwt _ = Content.insert dbh content_3 in
     lwt id' = Link.insert dbh link_1 in
     let () = set_link_id id' in
-    lwt link' = Link.get dbh id' in
+    lwt link' = LinkedContent.get dbh id' in
     let full_link_1 = add_link_id id' linked_content_1 in
-    if Link.compare_linked_content full_link_1 link' != 0
+    if LinkedContent.compare full_link_1 link' != 0
     then failed name (string_of_link_diff full_link_1 link')
     else succeed name)
   in
@@ -1140,42 +1168,42 @@ let main () =
 
   lwt () = wrap_try "Link.Update" (fun name ->
     lwt id' = Link.update dbh link_id link_2 in
-    lwt link' = Link.get dbh id' in
-    if Link.compare_linked_content full_link_2 link' != 0
+    lwt link' = LinkedContent.get dbh id' in
+    if LinkedContent.compare full_link_2 link' != 0
     then failed name (string_of_link_diff full_link_2 link')
     else succeed name)
   in
 
-  lwt () = wrap_try "Link.Get" (fun name ->
-    lwt link' = Link.get dbh link_id in
-    if Link.compare_linked_content full_link_2 link' != 0
+  lwt () = wrap_try "LinkedContent.Get" (fun name ->
+    lwt link' = LinkedContent.get dbh link_id in
+    if LinkedContent.compare full_link_2 link' != 0
     then failed name (string_of_link_diff full_link_2 link')
     else succeed name)
   in
 
-  lwt () = wrap_try "Link.List" (fun name ->
-    lwt links = Link.list dbh in
+  lwt () = wrap_try "LinkedContent.List" (fun name ->
+    lwt links = LinkedContent.list dbh in
     if List.length links == 0
     then failed name "List.length == 0"
     else succeed name)
   in
 
-  lwt () = wrap_try "Link.List-By-Content-Uri" (fun name ->
-    lwt links = Link.list_by_content_uri dbh uri in
+  lwt () = wrap_try "LinkedContent.List-By-Content-Uri" (fun name ->
+    lwt links = LinkedContent.list_by_content_uri dbh uri in
     if List.length links == 0
     then failed name "List.length == 0"
     else succeed name)
   in
 
-  lwt () = wrap_try "Link.List-By-Content-Tag" (fun name ->
-    lwt links = Link.list_by_content_tag dbh uri [subject_2] in
+  lwt () = wrap_try "LinkedContent.List-By-Content-Tag" (fun name ->
+    lwt links = LinkedContent.list_by_content_tag dbh uri [subject_2] in
     if List.length links == 0
     then failed name "List.length == 0"
     else succeed name)
   in
 
-  lwt () = wrap_try "Link.Search" (fun name ->
-    lwt links = Link.search dbh uri ["sal"] in
+  lwt () = wrap_try "LinkedContent.Search" (fun name ->
+    lwt links = LinkedContent.search dbh uri ["sal"] in
     if List.length links == 0
     then failed name "List.length == 0"
     else succeed name)
@@ -1184,7 +1212,7 @@ let main () =
   lwt () = wrap_try "Link.Delete" (fun name ->
     lwt id' = Utils.Lwt_list.hd (Link.delete dbh [link_id]) in
     lwt _ =
-      try_lwt Link.get dbh id'
+      try_lwt LinkedContent.get dbh id'
       with
        | Not_found -> Lwt.return full_link_2
        | _ -> failed name (string_of_int id ^ ":: Is not deleted")
