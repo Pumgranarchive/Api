@@ -1,5 +1,5 @@
 let main () =
-  let dbh = Postgres.connect () in
+  lwt (dbh : 'a PGOCaml_generic.Make(Postgres.Lwt_thread).t) = Postgres.connect () in
 
 (******************************************************************************
 *********************************** Content ***********************************
@@ -183,7 +183,7 @@ let main () =
   in
 
   lwt () = wrap_try "Tag.List_by_content_uri" (fun name ->
-    lwt tags = Postgres.Tag.list_by_content_uri dbh [uri] in
+    lwt tags = Postgres.Tag.list_by_content_uri dbh uri in
     if List.length tags == 0
     then failed name "List.length == 0"
     else succeed name)

@@ -7,10 +7,9 @@ open Tools
 
 module Yojson = Yojson.Basic
 
-(*** Services
-     All services are registrer in twice step to allow the GUI
-     to get reference on them and use it.
-*)
+(******************************************************************************
+************************************ Tools ************************************
+*******************************************************************************)
 
 let map func = function
   | Some x -> Some (func x)
@@ -31,590 +30,284 @@ let post_json fallback =
   let post_params = Eliom_parameter.raw_post_data in
   Eliom_service.Http.post_service ~fallback ~post_params ()
 
-(*
-** Content
-*)
+(******************************************************************************
+*********************************** Content ***********************************
+*******************************************************************************)
 
-(* Get_detail  *)
-let uri_from_platform =
-  Eliom_service.Http.service
-    ~path:["content"; "from_platform"]
-    ~get_params:Eliom_parameter.(suffix (string "platform_name" **
-                                           string "content_name"))
-    ()
+module Content =
+struct
 
-let _ =
-  Eliom_registration.String.register
-    ~service:uri_from_platform
-    (fun (plt, name) () ->
-      let name = Rdf_store.uri_decode name in
-      return_of_json (Api.uri_from_platform plt name))
+  let get_detail =
+    Eliom_service.Http.service
+      ~path:["content"; "detail"]
+      ~get_params:Eliom_parameter.(suffix (string "content_uri"))
+      ()
 
-(* Get_detail  *)
-let get_detail =
-  Eliom_service.Http.service
-    ~path:["content"; "detail"]
-    ~get_params:Eliom_parameter.(suffix (string "content_uri"))
-    ()
+  let _ =
+    Eliom_registration.String.register
+      ~service:get_detail
+      (fun content_uri () -> return_of_json (Api.Content.get_detail content_uri))
 
-let _ =
-  Eliom_registration.String.register
-    ~service:get_detail
-    (fun content_uri () -> return_of_json (Api.get_detail content_uri))
+  let get_contents =
+    Eliom_service.Http.service
+      ~path:["content"; "list"]
+      ~get_params:Eliom_parameter.unit
+      ()
 
-(* get_contents *)
-let get_contents =
-  Eliom_service.Http.service
-    ~path:["content"; "list"]
-    ~get_params:Eliom_parameter.(suffix (opt (string "filter") **
-                                           opt (list "tags" (string "uri"))))
-    ()
+  let _ =
+    Eliom_registration.String.register
+      ~service:get_contents
+      (fun () () ->
+        return_of_json (Api.Content.list ()))
 
-(** Simple contents service  *)
-let _ =
-  Eliom_registration.String.register
-    ~service:get_contents
-    (fun (filter, tags_uris) () ->
-      let tags_uri_dcd = map (List.map Rdf_store.uri_decode) tags_uris in
-      return_of_json (Api.get_contents filter tags_uri_dcd))
+  let research_contents =
+    Eliom_service.Http.service
+      ~path:["content"; "research"]
+      ~get_params:Eliom_parameter.(suffix (string "research"))
+      ()
 
-(** This service allow a simpler matching url without superfluous slashs,
-    due by the two optional parameters. *)
-let _ =
-  Eliom_registration.String.register_service
-    ~path:["content"; "list"]
-    ~get_params:Eliom_parameter.(suffix (opt (string "filter")))
-    (fun filter () -> return_of_json (Api.get_contents filter None))
+  let _ =
+    Eliom_registration.String.register
+      ~service:research_contents
+      (fun research () ->
+        return_of_json (Api.Content.search research))
 
-(* research_contents *)
-let research_contents =
-  Eliom_service.Http.service
-    ~path:["content"; "research"]
-    ~get_params:Eliom_parameter.(suffix (opt (string "filter") **
-                                           (string "research")))
-    ()
+  let fallback_insert_content =
+    empty_fallback ["content"; "insert"]
+      "title, summary and text parameters are mandatory"
 
-(** Simple contents service  *)
-let _ =
-  Eliom_registration.String.register
-    ~service:research_contents
-    (fun (filter, research) () ->
-      return_of_json (Api.research_contents filter research))
+  let insert_content_json = post_json fallback_insert_content
 
-(* Insert content *)
-let fallback_insert_content =
-  empty_fallback ["content"; "insert"]
-    "title, summary and text parameters are mandatory"
-
-let insert_content_json = post_json fallback_insert_content
-
-let insert_content =
-  Eliom_service.Http.post_service
-    ~fallback:fallback_insert_content
-    ~post_params:Eliom_parameter.(string "title" **
-                                  string "summary" **
-                                  string "text" **
-                                  opt (list "tags" (string "uri")))
-    ()
-
-let _ =
-  Eliom_registration.String.register
-    ~service:insert_content_json
-    (fun () (input_type, ostream) ->
-      let aux () =
-        lwt yojson = Tools.json_of_ocsigen_string_stream input_type ostream in
-        let title, summary, text, tags_uri =
-          Deserialize.get_insert_content_data yojson
+  let _ =
+    Eliom_registration.String.register
+      ~service:insert_content_json
+      (fun () (input_type, ostream) ->
+        let aux () =
+          lwt yojson = Tools.json_of_ocsigen_string_stream input_type ostream in
+          let uri, title, summary, mark, subjects =
+            Deserialize.get_insert_content_data yojson
+          in
+          return_of_json (Api.Content.insert uri title summary mark subjects)
         in
-          return_of_json (Api.insert_content title summary text tags_uri)
-      in
-      Tools.manage_bad_request aux)
+        Tools.manage_bad_request aux)
 
-let _ =
-  Eliom_registration.String.register
-    ~service:insert_content
-    (fun () (title, (summary, (text, tags_uri))) ->
-      return_of_json (Api.insert_content title summary text tags_uri)
-  )
+  let fallback_update_content =
+    empty_fallback ["content"; "update"]
+      "content_uri parameter is mandatory"
 
-(* Update content *)
-let fallback_update_content =
-  empty_fallback ["content"; "update"]
-    "content_uri parameter is mandatory"
+  let update_content_json = post_json fallback_update_content
 
-let update_content_json = post_json fallback_update_content
-
-let update_content =
-  Eliom_service.Http.post_service
-    ~fallback:fallback_update_content
-    ~post_params:Eliom_parameter.(string "content_uri" **
-                                  opt (string "title") **
-                                  opt (string "summary") **
-                                  opt (string "text") **
-                                  opt (list "tags" (string "uri")))
-    ()
-
-let _ =
-  Eliom_registration.String.register
-    ~service:update_content_json
-    (fun () (input_type, ostream) ->
-      let aux () =
-        lwt yojson = Tools.json_of_ocsigen_string_stream input_type ostream in
-        let content_uri, title, summary, text, tags_uri =
-          Deserialize.get_update_content_data yojson
+  let _ =
+    Eliom_registration.String.register
+      ~service:update_content_json
+      (fun () (input_type, ostream) ->
+        let aux () =
+          lwt yojson = Tools.json_of_ocsigen_string_stream input_type ostream in
+          let uri, title, summary, mark, tags =
+            Deserialize.get_insert_content_data yojson
+          in
+          return_of_json (Api.Content.update uri title summary mark tags)
         in
-        return_of_json (Api.update_content content_uri
-                          title summary text tags_uri)
-      in
-      Tools.manage_bad_request aux)
+        Tools.manage_bad_request aux)
 
-let _ =
-  Eliom_registration.String.register
-    ~service:update_content
-    (fun () (content_uri, (title, (summary, (text, tags_uri)))) ->
-      let uri = Rdf_store.uri_decode content_uri in
-      let uris = map (List.map Rdf_store.uri_decode) tags_uri in
-      return_of_json (Api.update_content uri
-                        title summary text uris))
+  let fallback_delete_contents =
+    empty_fallback ["content"; "delete"]
+      "contents_uri parameter is mandatory"
 
-(* Update content tags *)
-let fallback_update_content_tags =
-  empty_fallback ["content"; "update_tags"]
-    "content_uri parameter is mandatory"
+  let delete_contents_json = post_json fallback_delete_contents
 
-let update_content_tags_json = post_json fallback_update_content_tags
-
-let update_content_tags =
-  Eliom_service.Http.post_service
-    ~fallback:fallback_update_content_tags
-    ~post_params:Eliom_parameter.(string "content_uri" **
-                                  (list "tags" (string "uri")))
-    ()
-
-let _ =
-  Eliom_registration.String.register
-    ~service:update_content_tags_json
-    (fun () (input_type, ostream) ->
-      let aux () =
-        lwt yojson = Tools.json_of_ocsigen_string_stream input_type ostream in
-        let content_uri, tags_uri =
-          Deserialize.get_update_content_tags_data yojson
+  let _ =
+    Eliom_registration.String.register
+      ~service:delete_contents_json
+      (fun () (input_type, ostream) ->
+        let aux () =
+          lwt yojson = Tools.json_of_ocsigen_string_stream input_type ostream in
+          let contents_uri = Deserialize.get_delete_contents_data yojson in
+          return_of_json (Api.Content.delete contents_uri)
         in
-        return_of_json (Api.update_content_tags content_uri tags_uri)
-      in
-      Tools.manage_bad_request aux)
+        Tools.manage_bad_request aux)
 
-let _ =
-  Eliom_registration.String.register
-    ~service:update_content_tags
-    (fun () (content_uri, tags_uri) ->
-      let uri = Rdf_store.uri_decode content_uri in
-      let uris = List.map Rdf_store.uri_decode tags_uri in
-      return_of_json (Api.update_content_tags uri uris))
+end
 
+(******************************************************************************
+************************************* Tag *************************************
+*******************************************************************************)
 
-(* Delete content *)
-let fallback_delete_contents =
-  empty_fallback ["content"; "delete"]
-    "contents_uri parameter is mandatory"
+module Tag =
+struct
 
-let delete_contents_json = post_json fallback_delete_contents
+  let get_tags_from_research =
+    Eliom_service.Http.service
+      ~path:["tag"; "research"]
+      ~get_params:Eliom_parameter.(suffix (string "research"))
+      ()
 
-let delete_contents =
-  Eliom_service.Http.post_service
-    ~fallback:fallback_delete_contents
-    ~post_params:Eliom_parameter.(list "contents" (string "uri"))
-    ()
+  let _ =
+    Eliom_registration.String.register
+      ~service:get_tags_from_research
+      (fun research () ->
+        return_of_json (Api.Tag.search research))
 
-let _ =
-  Eliom_registration.String.register
-    ~service:delete_contents_json
-    (fun () (input_type, ostream) ->
-      let aux () =
-        lwt yojson = Tools.json_of_ocsigen_string_stream input_type ostream in
-        let contents_uri = Deserialize.get_delete_contents_data yojson in
-        return_of_json (Api.delete_contents contents_uri)
-      in
-      Tools.manage_bad_request aux)
+  let get_tags_from_content =
+    Eliom_service.Http.service
+      ~path:["tag"; "from_content"]
+      ~get_params:Eliom_parameter.(suffix (string "content_uri"))
+      ()
 
-let _ =
-  Eliom_registration.String.register
-    ~service:delete_contents
-    (fun () (contents_uri) ->
-      let uris = List.map Rdf_store.uri_decode contents_uri in
-      return_of_json (Api.delete_contents uris))
+  let _ =
+    Eliom_registration.String.register
+      ~service:get_tags_from_content
+      (fun (content_uri) () ->
+        let uri = Rdf_store.uri_decode content_uri in
+        return_of_json (Api.Tag.list_from_content uri))
 
+end
 
-(*
-** Tags
-*)
+(******************************************************************************
+********************************* LinkedContent *******************************
+*******************************************************************************)
 
+module LinkedContent =
+struct
 
-(* Get_tags_by_type *)
-let get_tags_by_type =
-  Eliom_service.Http.service
-    ~path:["tag"; "from_type"]
-    ~get_params:Eliom_parameter.(suffix (string "type_name"))
-    ()
+  let get_detail =
+    Eliom_service.Http.service
+      ~path:["link"; "detail"]
+      ~get_params:Eliom_parameter.(suffix (string "link_uri"))
+      ()
 
-let _ =
-  Eliom_registration.String.register
-    ~service:get_tags_by_type
-    (fun (tag_type) () ->
-      return_of_json (Api.get_tags_by_type tag_type))
+  let _ =
+    Eliom_registration.String.register
+      ~service:get_detail
+      (fun link_uri () ->
+        let uri = int_of_string link_uri in
+        return_of_json (Api.LinkedContent.get_detail uri))
 
-(* Get tag from research *)
-let get_tags_from_research =
-  Eliom_service.Http.service
-    ~path:["tag"; "research"]
-    ~get_params:Eliom_parameter.(suffix (string "research"))
-    ()
+  let get_links_from_content =
+    Eliom_service.Http.service
+      ~path:["link"; "from_content"]
+      ~get_params:Eliom_parameter.(suffix (string "content_uri"))
+      ()
 
-let _ =
-  Eliom_registration.String.register
-    ~service:get_tags_from_research
-    (fun research () ->
-      return_of_json (Api.get_tags_from_research research))
+  let _ =
+    Eliom_registration.String.register
+      ~service:get_links_from_content
+      (fun content_uri () ->
+        let content_uri_dcd = Rdf_store.uri_decode content_uri in
+        return_of_json (Api.LinkedContent.list_from_content content_uri_dcd))
 
-(* Get_tag_from_content *)
-let get_tags_from_content =
-  Eliom_service.Http.service
-    ~path:["tag"; "from_content"]
-    ~get_params:Eliom_parameter.(suffix (string "content_uri"))
-    ()
+  let get_links_from_content_tags =
+       Eliom_service.Http.service
+         ~path:["link"; "from_content_tags"]
+         ~get_params:Eliom_parameter.(suffix ((string "content_uri") **
+            (list "tags" (string "subject"))))
+         ()
 
-let _ =
-  Eliom_registration.String.register
-    ~service:get_tags_from_content
-    (fun (content_uri) () ->
-      let uri = Rdf_store.uri_decode content_uri in
-      return_of_json (Api.get_tags_from_content uri))
+  let _ =
+    Eliom_registration.String.register
+     ~service:get_links_from_content_tags
+      (fun (content_uri, subjects) () ->
+        let content_uri_dcd = Rdf_store.uri_decode content_uri in
+        return_of_json
+          (Api.LinkedContent.list_from_content_tags content_uri_dcd subjects))
 
+  let get_links_from_research =
+       Eliom_service.Http.service
+         ~path:["link"; "from_research"]
+         ~get_params:Eliom_parameter.(suffix ((string "content_uri") **
+            (string "research")))
+         ()
 
-(* Get_tag_from_content_link *)
-let get_tags_from_content_link =
-  Eliom_service.Http.service
-    ~path:["tag"; "from_content_links"]
-    ~get_params:Eliom_parameter.(suffix (string "content_uri"))
-    ()
+  let _ =
+    Eliom_registration.String.register
+     ~service:get_links_from_research
+      (fun (content_uri, research) () ->
+        let uri_dcd = Rdf_store.uri_decode content_uri in
+        return_of_json (Api.LinkedContent.search uri_dcd research))
 
-let _ =
-  Eliom_registration.String.register
-    ~service:get_tags_from_content_link
-    (fun (content_uri) () ->
-      return_of_json (Api.get_tags_from_content_link content_uri))
+end
 
+(******************************************************************************
+************************************* Link ************************************
+*******************************************************************************)
 
-(* Insert tags *)
-let fallback_insert_tags =
-  empty_fallback ["tag"; "insert"] "tags_subject parameter is mandatory"
+module Link =
+struct
 
-let insert_tags_json = post_json fallback_insert_tags
+  (* Insert links *)
+  let fallback_insert_links =
+    empty_fallback ["link"; "insert"] "All parameters are mandatory"
 
-let insert_tags =
-  Eliom_service.Http.post_service
-    ~fallback:fallback_insert_tags
-    ~post_params:Eliom_parameter.(string "type_name" **
-                                  opt (string "uri") **
-                                  list "tags" (string "subject"))
-    ()
+  let insert_links_json = post_json fallback_insert_links
 
-let _ =
-  Eliom_registration.String.register
-    ~service:insert_tags_json
-    (fun () (input_type, ostream) ->
-      let aux () =
-        lwt yojson = Tools.json_of_ocsigen_string_stream input_type ostream in
-        let type_name, uri, tags_subject =
-          Deserialize.get_insert_tags_data yojson
+  let _ =
+    Eliom_registration.String.register
+      ~service:insert_links_json
+      (fun () (input_type, ostream) ->
+        let aux () =
+          lwt yojson = Tools.json_of_ocsigen_string_stream input_type ostream in
+          let data = Deserialize.get_insert_links_data yojson in
+          return_of_json (Api.Link.insert data)
         in
-        return_of_json (Api.insert_tags type_name uri tags_subject)
-      in
-      Tools.manage_bad_request aux)
+        Tools.manage_bad_request aux)
 
-let _ =
-  Eliom_registration.String.register
-    ~service:insert_tags
-    (fun () (type_name, (uri, tags_subject)) ->
-      let uri = map Rdf_store.uri_decode uri in
-      return_of_json (Api.insert_tags type_name uri tags_subject))
+  let fallback_delete_links =
+    empty_fallback ["link"; "delete"] "links_uri parameter is mandatory"
 
-(* Delete tags *)
-let fallback_delete_tags =
-  empty_fallback ["tag"; "delete"] "tags_uri parameter is mandatory"
+  let delete_links_json = post_json fallback_delete_links
 
-let delete_tags_json = post_json fallback_delete_tags
-
-let delete_tags =
-  Eliom_service.Http.post_service
-    ~fallback:fallback_delete_tags
-    ~post_params:Eliom_parameter.(list "tags" (string "uri"))
-    ()
-
-let _ =
-  Eliom_registration.String.register
-    ~service:delete_tags_json
-    (fun () (input_type, ostream) ->
-      let aux () =
-        lwt yojson = Tools.json_of_ocsigen_string_stream input_type ostream in
-        let tags_uri = Deserialize.get_delete_tags_data yojson in
-        return_of_json (Api.delete_tags tags_uri)
-      in
-      Tools.manage_bad_request aux)
-
-let _ =
-  Eliom_registration.String.register
-    ~service:delete_tags
-    (fun () (tags_uri) ->
-      let uris = List.map Rdf_store.uri_decode tags_uri in
-      return_of_json (Api.delete_tags uris))
-
-(*
-** links
-*)
-
-(* Get_link_detail *)
-let get_link_detail =
-  Eliom_service.Http.service
-    ~path:["link"; "detail"]
-    ~get_params:Eliom_parameter.(suffix (string "link_uri"))
-    ()
-
-let _ =
-  Eliom_registration.String.register
-    ~service:get_link_detail
-    (fun link_uri () ->
-      let uri = Rdf_store.uri_decode link_uri in
-      return_of_json (Api.get_link_detail uri))
-
-(* Get_links_from_content *)
-let get_links_from_content =
-  Eliom_service.Http.service
-    ~path:["link"; "from_content"]
-    ~get_params:Eliom_parameter.(suffix (string "content_uri"))
-    ()
-
-let _ =
-  Eliom_registration.String.register
-    ~service:get_links_from_content
-    (fun content_uri () ->
-      let content_uri_dcd = Rdf_store.uri_decode content_uri in
-      return_of_json (Api.get_links_from_content content_uri_dcd))
-
-
-(* Get_links_from_content_tags *)
-let get_links_from_content_tags =
-     Eliom_service.Http.service
-       ~path:["link"; "from_content_tags"]
-       ~get_params:Eliom_parameter.(suffix ((string "content_uri") **
-          (opt (list "tags" (string "uri")))))
-       ()
-
-let _ =
-  Eliom_registration.String.register
-   ~service:get_links_from_content_tags
-    (fun (content_uri, tags_uris) () ->
-      let content_uri_dcd = Rdf_store.uri_decode content_uri in
-      let tags_uri_dcd = map (List.map Rdf_store.uri_decode) tags_uris in
-      return_of_json
-        (Api.get_links_from_content_tags content_uri_dcd tags_uri_dcd))
-
-(* Get_links_from_research *)
-let get_links_from_research =
-     Eliom_service.Http.service
-       ~path:["link"; "from_research"]
-       ~get_params:Eliom_parameter.(suffix ((string "content_uri") **
-          (string "research")))
-       ()
-
-let _ =
-  Eliom_registration.String.register
-   ~service:get_links_from_research
-    (fun (content_uri, research) () ->
-      let uri_dcd = Rdf_store.uri_decode content_uri in
-      return_of_json (Api.get_links_from_research uri_dcd research))
-
-(* Click on Link *)
-let click_onlink =
-  Eliom_service.Http.service
-    ~path:["link"; "click"]
-    ~get_params:Eliom_parameter.(suffix (string "link_id")) ()
-
-let _ =
-  Eliom_registration.String.register
-    ~service:click_onlink
-    (fun str_link_id () ->
-      let aux () =
-        let link_id_dcd = Rdf_store.uri_decode str_link_id in
-        let link_id = Ptype.link_id_of_string link_id_dcd in
-        return_of_json (Api.click_onlink link_id)
-      in
-      Tools.manage_bad_request aux)
-
-(* Back button *)
-let back_button =
-  Eliom_service.Http.service
-    ~path:["link"; "back_button"]
-    ~get_params:Eliom_parameter.(suffix (string "link_id")) ()
-
-let _ =
-  Eliom_registration.String.register
-    ~service:back_button
-    (fun str_link_id () ->
-      let aux () =
-        let link_id_dcd = Rdf_store.uri_decode str_link_id in
-        let link_id = Ptype.link_id_of_string link_id_dcd in
-        return_of_json (Api.back_button link_id)
-      in
-      Tools.manage_bad_request aux)
-
-(* Insert links *)
-let fallback_insert_links =
-  empty_fallback ["link"; "insert"] "All parameters are mandatory"
-
-let insert_links =
-  Eliom_service.Http.post_service
-    ~fallback:fallback_insert_links
-    ~post_params:Eliom_parameter.(list "data"
-                                    (string "origin_uri" **
-                                       string "target_uri" **
-                                       list "tags" (string "uri")))
-    ()
-
-let insert_links_json = post_json fallback_insert_links
-
-let _ =
-  Eliom_registration.String.register
-    ~service:insert_links_json
-    (fun () (input_type, ostream) ->
-      let aux () =
-        lwt yojson = Tools.json_of_ocsigen_string_stream input_type ostream in
-        let data = Deserialize.get_insert_links_data yojson in
-        return_of_json (Api.insert_links data)
-      in
-      Tools.manage_bad_request aux)
-
-let _ =
-  Eliom_registration.String.register
-    ~service:insert_links
-    (fun () data ->
-      let aux () =
-        let to_triple (origin_uri, (target_uri, tags_uri)) =
-          (Rdf_store.uri_decode origin_uri,
-           Rdf_store.uri_decode target_uri,
-           List.map Rdf_store.uri_decode tags_uri)
+  let _ =
+    Eliom_registration.String.register
+      ~service:delete_links_json
+      (fun () (input_type, ostream) ->
+        let aux () =
+          lwt yojson = Tools.json_of_ocsigen_string_stream input_type ostream in
+          let links_uri = Deserialize.get_delete_links_data yojson in
+          return_of_json (Api.Link.delete links_uri)
         in
-        let formated_data = List.map to_triple data in
-        return_of_json (Api.insert_links formated_data)
-      in
-      Tools.manage_bad_request aux)
+        Tools.manage_bad_request aux)
 
-(* Insert scored links *)
-let fallback_insert_scored_links =
-  empty_fallback ["link"; "scored_insert"] "All parameters are mandatory"
+end
 
-let insert_scored_links =
-  Eliom_service.Http.post_service
-    ~fallback:fallback_insert_scored_links
-    ~post_params:Eliom_parameter.(list "data"
-                                    (string "origin_uri" **
-                                       string "target_uri" **
-                                       list "tags" (string "uri") **
-                                       int "score"))
-    ()
+(******************************************************************************
+************************************ Click ************************************
+*******************************************************************************)
 
-let insert_scored_links_json = post_json fallback_insert_scored_links
+module Click =
+struct
 
-let _ =
-  Eliom_registration.String.register
-    ~service:insert_scored_links_json
-    (fun () (input_type, ostream) ->
-      let aux () =
-        lwt yojson = Tools.json_of_ocsigen_string_stream input_type ostream in
-        let data = Deserialize.get_insert_scored_links_data yojson in
-        return_of_json (Api.insert_scored_links data)
-      in
-      Tools.manage_bad_request aux)
+(* (\* Click on Link *\) *)
+(* let click_onlink = *)
+(*   Eliom_service.Http.service *)
+(*     ~path:["link"; "click"] *)
+(*     ~get_params:Eliom_parameter.(suffix (string "link_id")) () *)
 
-let _ =
-  Eliom_registration.String.register
-    ~service:insert_scored_links
-    (fun () data ->
-      let aux () =
-        let to_triple (origin_uri, (target_uri, (tags_uri, score))) =
-          (Rdf_store.uri_decode origin_uri,
-           Rdf_store.uri_decode target_uri,
-           List.map Rdf_store.uri_decode tags_uri,
-           score)
-        in
-        let formated_data = List.map to_triple data in
-        return_of_json (Api.insert_scored_links formated_data)
-      in
-      Tools.manage_bad_request aux)
+(* let _ = *)
+(*   Eliom_registration.String.register *)
+(*     ~service:click_onlink *)
+(*     (fun str_link_id () -> *)
+(*       let aux () = *)
+(*         let link_id_dcd = Rdf_store.uri_decode str_link_id in *)
+(*         let link_id = Ptype.link_id_of_string link_id_dcd in *)
+(*         return_of_json (Api.click_onlink link_id) *)
+(*       in *)
+(*       Tools.manage_bad_request aux) *)
 
-(* Update links *)
-let fallback_update_link =
-  empty_fallback ["link"; "update"] "All parameter are mandatory"
+(* (\* Back button *\) *)
+(* let back_button = *)
+(*   Eliom_service.Http.service *)
+(*     ~path:["link"; "back_button"] *)
+(*     ~get_params:Eliom_parameter.(suffix (string "link_id")) () *)
 
-let update_links =
-  Eliom_service.Http.post_service
-    ~fallback:fallback_insert_links
-    ~post_params:Eliom_parameter.(list "data"
-                                    (string "link_uri" **
-                                       list "tags" (string "uri")))
-    ()
+(* let _ = *)
+(*   Eliom_registration.String.register *)
+(*     ~service:back_button *)
+(*     (fun str_link_id () -> *)
+(*       let aux () = *)
+(*         let link_id_dcd = Rdf_store.uri_decode str_link_id in *)
+(*         let link_id = Ptype.link_id_of_string link_id_dcd in *)
+(*         return_of_json (Api.back_button link_id) *)
+(*       in *)
+(*       Tools.manage_bad_request aux) *)
 
-let update_links_json = post_json fallback_update_link
-
-let _ =
-  Eliom_registration.String.register
-    ~service:update_links_json
-    (fun () (input_type, ostream) ->
-      let aux () =
-        lwt yojson = Tools.json_of_ocsigen_string_stream input_type ostream in
-        let data = Deserialize.get_update_links_data yojson in
-        return_of_json (Api.update_links data)
-      in
-      Tools.manage_bad_request aux)
-
-let _ =
-  Eliom_registration.String.register
-    ~service:update_links
-    (fun () data ->
-      let decode (link_uri, tags_uri) =
-        (Rdf_store.uri_decode link_uri,
-         List.map Rdf_store.uri_decode tags_uri)
-      in
-      let data_decoded = List.map decode data in
-      let aux () = return_of_json (Api.update_links data_decoded) in
-      Tools.manage_bad_request aux)
-
-(* Delete links *)
-let fallback_delete_links =
-  empty_fallback ["link"; "delete"] "links_uri parameter is mandatory"
-
-let delete_links_json = post_json fallback_delete_links
-
-let delete_links =
-  Eliom_service.Http.post_service
-    ~fallback:fallback_delete_links
-    ~post_params:Eliom_parameter.(list "links" (string "uri"))
-    ()
-
-let _ =
-  Eliom_registration.String.register
-    ~service:delete_links_json
-    (fun () (input_type, ostream) ->
-      let aux () =
-        lwt yojson = Tools.json_of_ocsigen_string_stream input_type ostream in
-        let links_uri = Deserialize.get_delete_links_data yojson in
-        return_of_json (Api.delete_links links_uri)
-      in
-      Tools.manage_bad_request aux)
-
-let _ =
-  Eliom_registration.String.register
-    ~service:delete_links
-    (fun () (links_uri) ->
-      let uris = List.map Rdf_store.uri_decode links_uri in
-      return_of_json (Api.delete_links uris))
+end

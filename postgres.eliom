@@ -61,18 +61,17 @@ let (^^) a b = a ^ " " ^ b
 module Pg =
 struct
 
-  let connect () = PGOCaml.connect ()
-    (* ~host="127.0.0.1" *)
-    (* ~user="api" *)
-    (* ~password="1234" *)
-    (* ~database="pumgrana" *)
+  let connect () = Lwt_PGOCaml.connect
+    ~host:"127.0.0.1"
+    ~user:"api"
+    ~password:"1234"
+    ~database:"pumgrana"
+    ()
 
-  let close lwt_dbh =
-    lwt dbh = lwt_dbh in
+  let close dbh =
     PGOCaml.close dbh
 
-  let prepare lwt_dbh name query =
-    lwt dbh = lwt_dbh in
+  let prepare dbh name query =
     (* print_endline ("\nPrepare:: " ^ name); *)
     (* print_endline query; *)
     PGOCaml.prepare dbh ~query ~name ()
@@ -82,8 +81,7 @@ struct
     lwt () = Utils.Lwt_list.iter_s_exc aux list in
     Lwt.return ()
 
-  let execute lwt_dbh name params =
-    lwt dbh = lwt_dbh in
+  let execute dbh name params =
     (* print_endline ("\nExecute:: " ^ name); *)
     (* List.iter (fun x -> match x with | Some x -> print_endline x | _ -> ()) params; *)
     PGOCaml.execute dbh ~name ~params ()
@@ -349,7 +347,7 @@ end
 module Content =
 struct
 
-  type t = (Ptype.uri * string * string)
+  type t = (Ptype.uri * string * string * float)
 
   let to_string (uri, title, summary, user_mark) =
     "(" ^ (String.concat ", "
@@ -541,6 +539,7 @@ struct
     let get = "Tag.Get"
     let list = "Tag.List"
     let list_by_content_uri = "Tag.List-By-Content-Uri"
+    let search = "Tag.Search"
     let insert = "Tag.Insert"
     let update = "Tag.Update"
     let delete = "Tag.Delete"
@@ -562,10 +561,17 @@ struct
         ~group_keys ~order_keys Conf.limit
 
     let list_by_content_uri () =
-      let contitions = Query.([(Nop, "content_uri", Values)]) in
+      let contitions = Query.([(Nop, "content_uri", Value)]) in
       let group_keys = ["tag_id"] in
       let order_keys = Query.([DESC "mark"]) in
       Query.select Format.To_get.tag Table.([tag]) contitions
+        ~group_keys ~order_keys Conf.limit
+
+    let search () =
+      let contitions = Query.([(Nop, "subject", Regexp)]) in
+      let group_keys = ["subject"] in
+      let order_keys = Query.([DESC "max(mark)"]) in
+      Query.select Format.To_get.content Table.([tag]) contitions
         ~group_keys ~order_keys Conf.limit
 
     let insert () =
@@ -592,6 +598,7 @@ struct
       [QueryName.get,                         QueryGen.get;
        QueryName.list,                        QueryGen.list;
        QueryName.list_by_content_uri,         QueryGen.list_by_content_uri;
+       QueryName.search,                      QueryGen.search;
        QueryName.insert,                      QueryGen.insert;
        QueryName.update,                      QueryGen.update;
        QueryName.delete,                      QueryGen.delete]
@@ -610,9 +617,14 @@ struct
     lwt results = Pg.execute dbh QueryName.list [] in
     Lwt.return (List.map Row.to_tag results)
 
-  let list_by_content_uri dbh content_uris =
-    let params = Query.Util.param_generator Query.([Uris content_uris]) in
+  let list_by_content_uri dbh content_uri =
+    let params = Query.Util.param_generator Query.([Uri content_uri]) in
     lwt results = Pg.execute dbh QueryName.list_by_content_uri params in
+    Lwt.return (List.map Row.to_tag results)
+
+  let search dbh fields =
+    let params = Query.Util.param_generator Query.([Words fields]) in
+    lwt results = Pg.execute dbh QueryName.search params in
     Lwt.return (List.map Row.to_tag results)
 
   let insert dbh (content_uri, subject, mark) =
@@ -892,9 +904,10 @@ let mfun_prepare = [Content.Prepare.all; Tag.Prepare.all;
                     Link.Prepare.all; LinkedContent.Prepare.all]
 
 let connect () =
-  let dbh = Pg.connect () in
+  lwt dbh = Pg.connect () in
+  let () = Lwt_PGOCaml.set_private_data dbh 42 in
   let prepare prepare_fun = prepare_fun dbh in
   lwt () = Utils.Lwt_list.iter_s_exc prepare mfun_prepare in
-  dbh
+  Lwt.return dbh
 
 let close = Pg.close
