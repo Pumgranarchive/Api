@@ -62,10 +62,10 @@ module Pg =
 struct
 
   let connect () = Lwt_PGOCaml.connect
-    ~host:"127.0.0.1"
-    ~user:"api"
-    ~password:"1234"
-    ~database:"pumgrana"
+    (* ~host:"127.0.0.1" *)
+    ~user:"nox"
+    (* ~password:"1234" *)
+    ~database:"nox"
     ()
 
   let close dbh =
@@ -569,10 +569,11 @@ struct
 
     let search () =
       let contitions = Query.([(Nop, "subject", Regexp)]) in
-      let group_keys = ["subject"] in
-      let order_keys = Query.([DESC "max(mark)"]) in
-      Query.select Format.To_get.content Table.([tag]) contitions
-        ~group_keys ~order_keys Conf.limit
+      let distinct_keys = ["subject"] in
+      let group_keys = ["tag_id"] in
+      let order_keys = Query.([DESC "subject"; DESC "max(mark)"]) in
+      Query.select Format.To_get.tag Table.([tag]) contitions
+        ~distinct_keys ~group_keys ~order_keys Conf.limit
 
     let insert () =
       let first_default = true in

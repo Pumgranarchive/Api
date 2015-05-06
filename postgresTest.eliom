@@ -41,7 +41,7 @@ let main () =
     with e -> failed name (Printexc.to_string e)
   in
 
-  print_endline "\n### Unitary tests of the PosgreSQL Module ###";
+  print_endline "\n### Unitary tests of the Postgres Module ###";
 
   lwt _ =
     try_lwt Postgres.Content.delete dbh [uri]
@@ -177,6 +177,13 @@ let main () =
 
   lwt () = wrap_try "Tag.List" (fun name ->
     lwt tags = Postgres.Tag.list dbh in
+    if List.length tags == 0
+    then failed name "List.length == 0"
+    else succeed name)
+  in
+
+  lwt () = wrap_try "Tag.Search" (fun name ->
+    lwt tags = Postgres.Tag.search dbh ["ara"] in
     if List.length tags == 0
     then failed name "List.length == 0"
     else succeed name)
