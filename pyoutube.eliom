@@ -7,19 +7,19 @@ exception Pyoutube of string
 *******************************************************************************)
 
 let is_youtube_uri uri =
-  let str_uri = Rdf_store.string_of_uri uri in
+  let str_uri = Ptype.string_of_uri uri in
   try ignore (Youtube_http.get_video_id_from_url str_uri); true
   with _ -> false
 
 let id_of_uri uri =
-  Youtube_http.get_video_id_from_url (Rdf_store.string_of_uri uri)
+  Youtube_http.get_video_id_from_url (Ptype.string_of_uri uri)
 
 let format (_, title, str_uri, summary, _) =
-  let uri = Rdf_store.uri_of_string str_uri in
+  let uri = Ptype.uri_of_string str_uri in
   uri, title, summary
 
 let log uri exc detail =
-  let suri = Rdf_store.string_of_uri uri in
+  let suri = Ptype.string_of_uri uri in
   let title = Log.log "youtube.error" suri exc detail in
   raise (Pyoutube title)
 

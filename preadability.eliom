@@ -36,7 +36,7 @@ let log suri exc detail =
   raise (Preadability title)
 
 let data_from_uri uri =
-  let str_uri = Rdf_store.string_of_uri uri in
+  let str_uri = Ptype.string_of_uri uri in
   let ruri = Rdf_uri.uri str_uri in
   lwt json =
       try_lwt Readability_http.get_parser ruri

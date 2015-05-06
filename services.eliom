@@ -158,7 +158,7 @@ struct
     Eliom_registration.String.register
       ~service:get_tags_from_content
       (fun (content_uri) () ->
-        let uri = Rdf_store.uri_decode content_uri in
+        let uri = Ptype.uri_decode content_uri in
         return_of_json (Api.Tag.list_from_content uri))
 
 end
@@ -193,7 +193,7 @@ struct
     Eliom_registration.String.register
       ~service:get_links_from_content
       (fun content_uri () ->
-        let content_uri_dcd = Rdf_store.uri_decode content_uri in
+        let content_uri_dcd = Ptype.uri_decode content_uri in
         return_of_json (Api.LinkedContent.list_from_content content_uri_dcd))
 
   let get_links_from_content_tags =
@@ -207,7 +207,7 @@ struct
     Eliom_registration.String.register
      ~service:get_links_from_content_tags
       (fun (content_uri, subjects) () ->
-        let content_uri_dcd = Rdf_store.uri_decode content_uri in
+        let content_uri_dcd = Ptype.uri_decode content_uri in
         return_of_json
           (Api.LinkedContent.list_from_content_tags content_uri_dcd subjects))
 
@@ -222,7 +222,7 @@ struct
     Eliom_registration.String.register
      ~service:get_links_from_research
       (fun (content_uri, research) () ->
-        let uri_dcd = Rdf_store.uri_decode content_uri in
+        let uri_dcd = Ptype.uri_decode content_uri in
         return_of_json (Api.LinkedContent.search uri_dcd research))
 
 end
@@ -287,7 +287,7 @@ struct
 (*     ~service:click_onlink *)
 (*     (fun str_link_id () -> *)
 (*       let aux () = *)
-(*         let link_id_dcd = Rdf_store.uri_decode str_link_id in *)
+(*         let link_id_dcd = Ptype.uri_decode str_link_id in *)
 (*         let link_id = Ptype.link_id_of_string link_id_dcd in *)
 (*         return_of_json (Api.click_onlink link_id) *)
 (*       in *)
@@ -304,7 +304,7 @@ struct
 (*     ~service:back_button *)
 (*     (fun str_link_id () -> *)
 (*       let aux () = *)
-(*         let link_id_dcd = Rdf_store.uri_decode str_link_id in *)
+(*         let link_id_dcd = Ptype.uri_decode str_link_id in *)
 (*         let link_id = Ptype.link_id_of_string link_id_dcd in *)
 (*         return_of_json (Api.back_button link_id) *)
 (*       in *)

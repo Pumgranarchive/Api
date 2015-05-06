@@ -1,4 +1,4 @@
-type 'a listenner = (Rdf_store.uri -> 'a Lwt.t)
+type 'a listenner = (Ptype.uri -> 'a Lwt.t)
 type 'a t = (float * 'a) Ocsipersist.table * 'a listenner * (float * string) list ref
 
 (******************************************************************************
@@ -56,7 +56,7 @@ let limit table history =
 
 (** Refresh data of the given key *)
 let refresh table sublistenner str_key =
-  let key = Rdf_store.uri_of_string str_key in
+  let key = Ptype.uri_of_string str_key in
   lwt new_data = sublistenner key in
   let deadline = calc_deadline () in
   lwt ()  = Ocsipersist.add table str_key (deadline, new_data) in
@@ -108,7 +108,7 @@ let make name sublistenner =
   Lwt.return (table, sublistenner, history)
 
 let add (table, sublistenner, history) key data =
-  let str_key = Rdf_store.string_of_uri key in
+  let str_key = Ptype.string_of_uri key in
   let deadline = new_deadline table sublistenner str_key in
   lwt () = Ocsipersist.add table str_key (deadline, data) in
   lwt () = History.access table history str_key in
@@ -116,7 +116,7 @@ let add (table, sublistenner, history) key data =
   Lwt.return ()
 
 let get (table, sublistenner, history) key =
-  let str_key = Rdf_store.string_of_uri key in
+  let str_key = Ptype.string_of_uri key in
   lwt _, data = Ocsipersist.find table str_key in
   lwt () = History.access table history str_key in
   Lwt.return data

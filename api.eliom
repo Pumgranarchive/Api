@@ -44,13 +44,13 @@ module Content =
 struct
 
   let full_assoc ((uri, title, summary, user_mark), body) =
-    `Assoc [(Tools.uri_field, `String (Rdf_store.string_of_uri uri));
+    `Assoc [(Tools.uri_field, `String (Ptype.string_of_uri uri));
             (Tools.title_field, `String title);
             (Tools.summary_field, `String summary);
             (Tools.body_field, `String body)]
 
   let assoc (uri, title, summary, user_mark) =
-    `Assoc [(Tools.uri_field, `String (Rdf_store.string_of_uri uri));
+    `Assoc [(Tools.uri_field, `String (Ptype.string_of_uri uri));
             (Tools.title_field, `String title);
             (Tools.summary_field, `String summary)]
 
@@ -99,7 +99,7 @@ struct
           (fun (s, m) -> Postgres.Tag.insert dbh (uri, s, m)) tags
       in
       lwt tag_ids = Lwt_list.map_s_exc Lwt_list.wait lwt_tag_ids in
-      Lwt.return (`String (Rdf_store.string_of_uri returned_uri))
+      Lwt.return (`String (Ptype.string_of_uri returned_uri))
     in
     Tools.check_return
       ~param_name:Tools.content_id_ret_name
@@ -123,7 +123,7 @@ struct
         | Invalid_argument str_err ->
           raise Conf.(Pum_exc (return_not_found, str_err))
       in
-      Lwt.return (`String (Rdf_store.string_of_uri returned_uri))
+      Lwt.return (`String (Ptype.string_of_uri returned_uri))
     in
     Tools.check_return aux
 
@@ -131,7 +131,7 @@ struct
     let aux () =
       let uris = List.map Ptype.uri_of_string content_uris in
       lwt returned_uris = Postgres.Content.delete dbh uris in
-      let json_list = List.map (fun u -> `String (Rdf_store.string_of_uri u))
+      let json_list = List.map (fun u -> `String (Ptype.string_of_uri u))
         returned_uris
       in
       Lwt.return (`List json_list)
@@ -181,7 +181,7 @@ module LinkedContent =
 struct
 
   let full_assoc (link_id, nature, mark, user_mark, uri, title, summary) =
-    let str_uri = Rdf_store.string_of_uri uri in
+    let str_uri = Ptype.string_of_uri uri in
     `Assoc [(Tools.link_id_ret_name, `Int link_id);
             (Tools.content_id_ret_name, `String str_uri);
             (Tools.content_title_ret_name, `String title);
@@ -189,7 +189,7 @@ struct
             (Tools.tags_ret_name, `String nature)]
 
   let assoc (link_id, nature, mark, user_mark, uri, title, summary) =
-    let str_uri = Rdf_store.string_of_uri uri in
+    let str_uri = Ptype.string_of_uri uri in
     `Assoc [(Tools.link_id_ret_name, `Int link_id);
             (Tools.content_id_ret_name, `String str_uri);
             (Tools.content_title_ret_name, `String title);
@@ -252,9 +252,9 @@ struct
   (*   let aux () = *)
   (*     let link_of_uri (origin_str_uri, target_str_uri, tags_str_uri, score) = *)
   (*       let data = *)
-  (*         Rdf_store.uri_of_string origin_str_uri, *)
-  (*         Rdf_store.uri_of_string target_str_uri, *)
-  (*         List.map Rdf_store.uri_of_string tags_str_uri, *)
+  (*         uri_of_string origin_str_uri, *)
+  (*         uri_of_string target_str_uri, *)
+  (*         List.map uri_of_string tags_str_uri, *)
   (*         score *)
   (*       in *)
   (*       data *)
