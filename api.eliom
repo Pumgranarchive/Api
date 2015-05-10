@@ -94,6 +94,7 @@ struct
     let aux () =
       let uri = Ptype.uri_of_string content_str_uri in
       let content = (uri, title, summary, user_mark) in
+      lwt _ = Postgres.Content.delete dbh [uri] in
       lwt returned_uri = Postgres.Content.insert dbh content in
       lwt lwt_tag_ids = Lwt_list.map_exc
           (fun (s, m) -> Postgres.Tag.insert dbh (uri, s, m)) tags
