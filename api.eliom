@@ -105,28 +105,6 @@ struct
       ~param_name:Tools.content_id_ret_name
       ~default_return:Conf.return_created aux
 
-  let update content_str_uri title summary user_mark tags =
-    let aux () =
-      let uri = Ptype.uri_of_string content_str_uri in
-      let content = (uri, title, summary, user_mark) in
-      lwt returned_uri =
-        try_lwt
-          lwt returned_uri = Postgres.Content.update dbh content in
-          lwt lwt_tag_ids = Lwt_list.map_exc
-              (fun (s, m) -> Postgres.Tag.insert dbh (uri, s, m)) tags
-          in
-          lwt tag_ids = Lwt_list.map_s_exc Lwt_list.wait lwt_tag_ids in
-          Lwt.return returned_uri
-        with
-        | Not_found ->
-          raise Conf.(Pum_exc (return_not_found, errstr_not_found content_str_uri))
-        | Invalid_argument str_err ->
-          raise Conf.(Pum_exc (return_not_found, str_err))
-      in
-      Lwt.return (`String (Ptype.string_of_uri returned_uri))
-    in
-    Tools.check_return aux
-
   let delete content_uris =
     let aux () =
       let uris = List.map Ptype.uri_of_string content_uris in

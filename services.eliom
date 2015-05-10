@@ -91,25 +91,6 @@ struct
         in
         Tools.manage_bad_request aux)
 
-  let fallback_update_content =
-    empty_fallback ["content"; "update"]
-      "content_uri parameter is mandatory"
-
-  let update_content_json = post_json fallback_update_content
-
-  let _ =
-    Eliom_registration.String.register
-      ~service:update_content_json
-      (fun () (input_type, ostream) ->
-        let aux () =
-          lwt yojson = Tools.json_of_ocsigen_string_stream input_type ostream in
-          let uri, title, summary, mark, tags =
-            Deserialize.get_insert_content_data yojson
-          in
-          return_of_json (Api.Content.update uri title summary mark tags)
-        in
-        Tools.manage_bad_request aux)
-
   let fallback_delete_contents =
     empty_fallback ["content"; "delete"]
       "contents_uri parameter is mandatory"
