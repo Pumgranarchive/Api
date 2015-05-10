@@ -90,6 +90,7 @@ struct
 
   (*** Setters  *)
 
+  (* WARNING: Removing every thing even user_mark *)
   let insert content_str_uri title summary user_mark tags =
     let aux () =
       let uri = Ptype.uri_of_string content_str_uri in
