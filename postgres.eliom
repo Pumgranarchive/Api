@@ -33,7 +33,7 @@ end
 module Format =
 struct
 
-  module To_get =
+  module Get =
   struct
     let content = ["content.content_uri"; "title"; "summary"; "content.user_mark"]
     let link = ["link_id"; "origin_uri"; "target_uri";
@@ -43,11 +43,18 @@ struct
     let tag = ["tag_id"; "tag.content_uri"; "subject"; "tag.mark"]
   end
 
-  module To_set =
+  module Insert =
   struct
     let content = ["content_uri"; "title"; "summary"; "user_mark"]
-    let link = ["link_id"; "origin_uri"; "target_uri"; "nature"; "mark"; "user_mark"]
-    let tag = ["tag_id"; "content_uri"; "subject"; "mark"]
+    let link = ["origin_uri"; "target_uri"; "nature"; "mark"; "user_mark"]
+    let tag = ["content_uri"; "subject"; "mark"]
+  end
+
+  module Update =
+  struct
+    let content = ["content_uri"; "title"; "summary"]
+    let link = ["origin_uri"; "target_uri"; "nature"; "mark"]
+    let tag = ["content_uri"; "subject"; "mark"]
   end
 
 end
@@ -384,12 +391,12 @@ struct
     let get () =
       let contitions = Query.([(Nop, "content_uri", Value)]) in
       let group_keys = ["content_uri"] in
-      Query.select Format.To_get.content [Table.content] contitions
+      Query.select Format.Get.content [Table.content] contitions
         ~group_keys Conf.limit
 
     let list () =
       let group_keys = ["content_uri"] in
-      Query.select Format.To_get.content [Table.content] []
+      Query.select Format.Get.content [Table.content] []
         ~group_keys Conf.limit
 
     let list_by_subject () =
@@ -400,13 +407,13 @@ struct
       in
       let group_keys = ["content.content_uri"] in
       let order_keys = Query.([DESC "max(mark)"]) in
-      Query.select Format.To_get.content Table.([content; tag]) contitions
+      Query.select Format.Get.content Table.([content; tag]) contitions
         ~group_keys ~order_keys Conf.limit
 
     let search_by_title_and_summary () =
       let contitions = Query.([(Nop, "title", Regexp); (Or, "summary", Regexp)]) in
       let group_keys = ["content_uri"] in
-      Query.select Format.To_get.content Table.([content]) contitions
+      Query.select Format.Get.content Table.([content]) contitions
         ~group_keys Conf.limit
 
     let search_by_subject () =
@@ -416,7 +423,7 @@ struct
       in
       let group_keys = ["content.content_uri"] in
       let order_keys = Query.([DESC "max(mark)"]) in
-      Query.select Format.To_get.content Table.([content; tag]) contitions
+      Query.select Format.Get.content Table.([content; tag]) contitions
         ~group_keys ~order_keys Conf.limit
 
     let search () =
@@ -426,12 +433,12 @@ struct
 
     let insert () =
       let returns = ["content_uri"] in
-      Query.insert Format.To_set.content Table.content returns
+      Query.insert Format.Insert.content Table.content returns
 
     let update () =
       let contitions = Query.([(Nop, "content_uri", Value)]) in
       let returns = ["content_uri"] in
-      Query.update Format.To_set.content Table.content contitions returns
+      Query.update Format.Update.content Table.content contitions returns
 
     let delete () =
       let contitions = Query.([(Nop, "content_uri", Values)]) in
@@ -496,9 +503,9 @@ struct
     if List.length results = 0 then raise Not_found
     else Lwt.return (Row.to_content_uri (List.hd results))
 
-  let update dbh (content_uri, title, summary, user_mark) =
+  let update dbh (content_uri, title, summary) =
     let params = Query.Util.param_generator
-      Query.([Uri content_uri; String title; String summary; Float user_mark;
+      Query.([Uri content_uri; String title; String summary;
               Uri content_uri])
     in
     lwt results = Pg.execute dbh QueryName.update params in
@@ -551,20 +558,20 @@ struct
     let get () =
       let contitions = Query.([(Nop, "tag_id", Value)]) in
       let group_keys = ["tag_id"] in
-      Query.select Format.To_get.tag [Table.tag] contitions
+      Query.select Format.Get.tag [Table.tag] contitions
         ~group_keys Conf.limit
 
     let list () =
       let group_keys = ["tag_id"] in
       let order_keys = Query.([DESC "mark"]) in
-      Query.select Format.To_get.tag [Table.tag] []
+      Query.select Format.Get.tag [Table.tag] []
         ~group_keys ~order_keys Conf.limit
 
     let list_by_content_uri () =
       let contitions = Query.([(Nop, "content_uri", Value)]) in
       let group_keys = ["tag_id"] in
       let order_keys = Query.([DESC "mark"]) in
-      Query.select Format.To_get.tag Table.([tag]) contitions
+      Query.select Format.Get.tag Table.([tag]) contitions
         ~group_keys ~order_keys Conf.limit
 
     let search () =
@@ -572,18 +579,17 @@ struct
       let distinct_keys = ["subject"] in
       let group_keys = ["tag_id"] in
       let order_keys = Query.([DESC "subject"; DESC "max(mark)"]) in
-      Query.select Format.To_get.tag Table.([tag]) contitions
+      Query.select Format.Get.tag Table.([tag]) contitions
         ~distinct_keys ~group_keys ~order_keys Conf.limit
 
     let insert () =
-      let first_default = true in
       let returns = ["tag_id"] in
-      Query.insert ~first_default Format.To_set.tag Table.tag returns
+      Query.insert Format.Insert.tag Table.tag returns
 
     let update () =
       let contitions = Query.([(Nop, "tag_id", Value)]) in
       let returns = ["tag_id"] in
-      Query.update Format.To_set.tag Table.tag contitions returns
+      Query.update Format.Update.tag Table.tag contitions returns
 
     let delete () =
       let contitions = Query.([(Nop, "tag_id", Values)]) in
@@ -638,7 +644,7 @@ struct
 
   let update dbh id (content_uri, subject, mark) =
     let params = Query.Util.param_generator
-      Query.([Id id; Uri content_uri; String subject; Float mark; Id id])
+      Query.([Uri content_uri; String subject; Float mark; Id id])
     in
     lwt results = Pg.execute dbh QueryName.update params in
     if List.length results = 0 then raise Not_found
@@ -692,14 +698,13 @@ struct
   struct
 
     let insert () =
-      let first_default = true in
       let returns = ["link_id"] in
-      Query.insert ~first_default Format.To_set.link Table.link returns
+      Query.insert Format.Insert.link Table.link returns
 
     let update () =
       let contitions = Query.([(Nop, "link_id", Value)]) in
       let returns = ["link_id"] in
-      Query.update Format.To_set.link Table.link contitions returns
+      Query.update Format.Update.link Table.link contitions returns
 
     let delete () =
       let contitions = Query.([(Nop, "link_id", Values)]) in
@@ -729,10 +734,9 @@ struct
     if List.length results = 0 then raise Not_found
     else Lwt.return (Row.to_link_id (List.hd results))
 
-  let update dbh id (origin_uri, target_uri, nature, mark, user_mark) =
+  let update dbh id (origin_uri, target_uri, nature, mark) =
     let params = Query.Util.param_generator
-      Query.([Id id; Uri origin_uri; Uri target_uri; String nature;
-              Float mark; Float user_mark; Id id])
+      Query.([Uri origin_uri; Uri target_uri; String nature; Float mark; Id id])
     in
     lwt results = Pg.execute dbh QueryName.update params in
     if List.length results = 0 then raise Not_found
@@ -796,7 +800,7 @@ struct
                 (And, "link_id", Value)])
       in
       let tables = Table.([link; content]) in
-      Query.select Format.To_get.linked_content tables contitions
+      Query.select Format.Get.linked_content tables contitions
         Conf.limit
 
     let list () =
@@ -806,7 +810,7 @@ struct
       let distinct_keys = Query.(["content.content_uri"]) in
       let tables = Table.([link; content]) in
       let order_keys = Query.([DESC "content.content_uri"; DESC "link.mark"]) in
-      Query.select ~distinct_keys Format.To_get.linked_content tables contitions
+      Query.select ~distinct_keys Format.Get.linked_content tables contitions
         ~order_keys Conf.limit
 
     let list_by_content_uri () =
@@ -817,7 +821,7 @@ struct
       let distinct_keys = Query.(["content.content_uri"]) in
       let tables = Table.([link; content]) in
       let order_keys = Query.([DESC "content.content_uri"; DESC "link.mark"]) in
-      Query.select ~distinct_keys Format.To_get.linked_content tables contitions
+      Query.select ~distinct_keys Format.Get.linked_content tables contitions
         ~order_keys Conf.limit
 
     let list_by_content_tag () =
@@ -830,7 +834,7 @@ struct
       let distinct_keys = Query.(["content.content_uri"]) in
       let order_keys = Query.([DESC "content.content_uri"; DESC "link.mark"]) in
       let tables = Table.([link; content; tag]) in
-      Query.select ~distinct_keys Format.To_get.linked_content tables contitions
+      Query.select ~distinct_keys Format.Get.linked_content tables contitions
         ~order_keys Conf.limit
 
     let search () =
@@ -845,7 +849,7 @@ struct
       let distinct_keys = Query.(["content.content_uri"]) in
       let order_keys = Query.([DESC "content.content_uri"; DESC "link.mark"]) in
       let tables = Table.([link; content; tag]) in
-      Query.select ~distinct_keys Format.To_get.linked_content tables contitions
+      Query.select ~distinct_keys Format.Get.linked_content tables contitions
         ~order_keys Conf.limit
 
   end

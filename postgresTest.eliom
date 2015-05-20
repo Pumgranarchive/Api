@@ -22,9 +22,14 @@ let main () =
         "(output) " ^ Ptype.string_of_uri output ^ "\n")
   in
 
+  let add_user_mark (uri, title, summary) =
+    (uri, title, summary, 0.)
+  in
+
   let uri = to_uri "http://patate.com" in
   let content_1 = (uri, "patateee", "awesome", 0.) in
-  let content_2 = (uri, "aubergine", "carotte", 0.) in
+  let content_2 = (uri, "aubergine", "carotte") in
+  let full_content_2 = add_user_mark content_2 in
 
   let failed name desc =
     print_endline ("Failed    ::\t"^name);
@@ -59,15 +64,15 @@ let main () =
   lwt () = wrap_try "Content.Update" (fun name ->
     lwt uri' = Postgres.Content.update dbh content_2 in
     lwt content' = Postgres.Content.get dbh uri' in
-    if Postgres.Content.compare content_2 content' != 0
-    then failed name (string_of_content_diff content_2 content')
+    if Postgres.Content.compare full_content_2 content' != 0
+    then failed name (string_of_content_diff full_content_2 content')
     else succeed name)
   in
 
   lwt () = wrap_try "Content.Get" (fun name ->
     lwt content' = Postgres.Content.get dbh uri in
-    if Postgres.Content.compare content_2 content' != 0
-    then failed name (string_of_content_diff content_2 content')
+    if Postgres.Content.compare full_content_2 content' != 0
+    then failed name (string_of_content_diff full_content_2 content')
     else succeed name)
   in
 
@@ -223,9 +228,9 @@ let main () =
   let tag_2 = (uri_3, subject_2, 42.2) in
 
   let content_3 = (uri_3, title_3, summary_3, 0.) in
-  let link_1 = (uri, uri_3, nature_1, 3., 0.) in
-  let link_2 = (uri, uri_3, nature_2, 5., 1.) in
-  let linked_content_1 = (nature_1, 3., 0., uri_3, title_3, summary_3) in
+  let link_1 = (uri, uri_3, nature_1, 3., 1.) in
+  let link_2 = (uri, uri_3, nature_2, 5.) in
+  let linked_content_1 = (nature_1, 3., 1., uri_3, title_3, summary_3) in
   let linked_content_2 = (nature_2, 5., 1., uri_3, title_3, summary_3) in
 
   let add_link_id id (nature, mark, user_mark, uri, title, summary) =
@@ -358,7 +363,7 @@ let main () =
     lwt _ =
       try_lwt Postgres.Content.get dbh uri
       with
-       | Not_found -> Lwt.return content_2
+       | Not_found -> Lwt.return full_content_2
        | _ -> failed name (Ptype.string_of_uri uri ^ ":: Is not deleted")
     in
     if Ptype.compare_uri uri uri' != 0
