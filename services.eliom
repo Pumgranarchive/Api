@@ -3,9 +3,9 @@
 ** This module registre services of API
 *)
 
-open Tools
-
 module Yojson = Yojson.Basic
+
+open Tools
 
 (******************************************************************************
 ************************************ Tools ************************************

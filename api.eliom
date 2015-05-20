@@ -128,7 +128,8 @@ module Tag =
 struct
 
   let format (id, uri, subject, mark) =
-    `Assoc [(Tools.subject_field, `String subject)]
+    `Assoc [(Tools.tagsid_field, `Int id);
+            (Tools.subject_field, `String subject)]
 
   let list_from_content content_str_uri =
     let aux () =
@@ -166,7 +167,7 @@ struct
             (Tools.content_id_ret_name, `String str_uri);
             (Tools.content_title_ret_name, `String title);
             (Tools.content_summary_ret_name, `String summary);
-            (Tools.tags_ret_name, `String nature)]
+            (Tools.nature_ret_name, `String nature)]
 
   let assoc (link_id, nature, mark, user_mark, uri, title, summary) =
     let str_uri = Ptype.string_of_uri uri in
