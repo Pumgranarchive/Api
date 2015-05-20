@@ -105,10 +105,10 @@ struct
 
   let _ =
     Eliom_registration.String.register_service
-      ~path:["tag"; "research"]
-      ~get_params:Eliom_parameter.(suffix (string "research"))
-      (fun research () ->
-        return_of_json (Api.Tag.search research))
+      ~path:["tag"; "search"]
+      ~get_params:Eliom_parameter.(suffix (string "search"))
+      (fun search () ->
+        return_of_json (Api.Tag.search search))
 
   let _ =
     Eliom_registration.String.register_service
@@ -129,7 +129,7 @@ struct
 
   let _ =
     Eliom_registration.String.register_service
-      ~path:["link"; "detail"]
+      ~path:["linkedcontent"; "detail"]
       ~get_params:Eliom_parameter.(suffix (string "link_uri"))
       (fun link_uri () ->
         let uri = int_of_string link_uri in
@@ -155,7 +155,7 @@ struct
 
   let _ =
     Eliom_registration.String.register_service
-      ~path:["link"; "from_research"]
+      ~path:["link"; "search"]
       ~get_params:Eliom_parameter.(suffix ((string "content_uri") **
                                               (string "research")))
       (fun (content_uri, research) () ->
