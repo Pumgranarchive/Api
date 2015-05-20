@@ -75,10 +75,10 @@ struct
       (fun () (input_type, ostream) ->
         let aux () =
           lwt yojson = Tools.json_of_ocsigen_string_stream input_type ostream in
-          let uri, title, summary, mark, subjects =
+          let uri, title, summary, subjects =
             Deserialize.get_insert_content_data yojson
           in
-          return_of_json (Api.Content.insert uri title summary mark subjects)
+          return_of_json (Api.Content.insert uri title summary subjects)
         in
         Tools.manage_bad_request aux)
 

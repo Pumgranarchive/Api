@@ -20,9 +20,8 @@ let get_insert_content_data json_content =
     let uri = (member "uri" json_content) in
     let title = member "title" json_content in
     let summary = member "summary" json_content in
-    let mark = to_float (member "mark" json_content) in
     let tags = member "tags" json_content in
-    to_string uri, to_string title, to_string summary, mark,
+    to_string uri, to_string title, to_string summary,
     List.map to_tag (to_list tags)
   with
   | _ -> raise (Pum_exc (return_not_found, "Bad insert_content format"))

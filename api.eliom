@@ -90,13 +90,16 @@ struct
 
   (*** Setters  *)
 
-  (* WARNING: Removing every thing even user_mark *)
-  let insert content_str_uri title summary user_mark tags =
+  let insert content_str_uri title summary tags =
     let aux () =
       let uri = Ptype.uri_of_string content_str_uri in
-      let content = (uri, title, summary, user_mark) in
-      lwt _ = Postgres.Content.delete dbh [uri] in
-      lwt returned_uri = Postgres.Content.insert dbh content in
+      let default_user_mark = 0. in
+      let content = (uri, title, summary) in
+      let full_content = (uri, title, summary, default_user_mark) in
+      lwt returned_uri =
+        try_lwt Postgres.Content.update dbh content
+        with Not_found -> Postgres.Content.insert dbh full_content
+      in
       lwt lwt_tag_ids = Lwt_list.map_exc
           (fun (s, m) -> Postgres.Tag.insert dbh (uri, s, m)) tags
       in
