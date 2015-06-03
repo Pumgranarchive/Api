@@ -137,7 +137,7 @@ struct
 
   let _ =
     Eliom_registration.String.register_service
-      ~path:["link"; "from_content"]
+      ~path:["linkedcontent"; "from_content"]
       ~get_params:Eliom_parameter.(suffix (string "content_uri"))
       (fun content_uri () ->
         let content_uri_dcd = Ptype.uri_decode content_uri in
@@ -145,7 +145,7 @@ struct
 
   let _ =
     Eliom_registration.String.register_service
-      ~path:["link"; "from_content_tags"]
+      ~path:["linkedcontent"; "from_content_tags"]
       ~get_params:Eliom_parameter.(suffix ((string "content_uri") **
                                               (list "tags" (string "subject"))))
       (fun (content_uri, subjects) () ->
@@ -155,7 +155,7 @@ struct
 
   let _ =
     Eliom_registration.String.register_service
-      ~path:["link"; "search"]
+      ~path:["linkedcontent"; "search"]
       ~get_params:Eliom_parameter.(suffix ((string "content_uri") **
                                               (string "research")))
       (fun (content_uri, research) () ->
