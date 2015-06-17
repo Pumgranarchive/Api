@@ -97,8 +97,8 @@ struct
       let content = (uri, title, summary) in
       let full_content = (uri, title, summary, default_user_mark) in
       lwt returned_uri =
-        try_lwt Postgres.Content.update dbh content
-        with Not_found -> Postgres.Content.insert dbh full_content
+        try_lwt Postgres.Content.insert dbh full_content
+        with _ -> Postgres.Content.update dbh content
       in
       lwt lwt_tag_ids = Lwt_list.map_exc
           (fun (s, m) -> Postgres.Tag.insert dbh (uri, s, m)) tags

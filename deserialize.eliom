@@ -17,7 +17,7 @@ let to_tag json =
 (** Get insert content input data *)
 let get_insert_content_data json_content =
   try
-    let uri = (member "uri" json_content) in
+    let uri = member "uri" json_content in
     let title = member "title" json_content in
     let summary = member "summary" json_content in
     let tags = member "tags" json_content in
@@ -37,8 +37,8 @@ let get_delete_contents_data json_content =
 (** Get delete tags input data *)
 let get_delete_tags_data json_content =
   try
-    let tags_uri = member "tags_uri" json_content in
-    List.map to_string (to_list tags_uri)
+    let ids = member "subjects_id" json_content in
+    List.map to_string (to_list ids)
   with
   | _ -> raise (Pum_exc (return_not_found, "Bad delete_tags format"))
 
