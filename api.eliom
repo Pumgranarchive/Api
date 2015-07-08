@@ -34,8 +34,6 @@ let rec get_data_from uri = function
     else get_data_from uri next
   | [] -> raise Not_found
 
-lwt dbh = Postgres.connect ()
-
 (******************************************************************************
 *********************************** Content ***********************************
 *******************************************************************************)
@@ -56,11 +54,13 @@ struct
 
   let get_detail content_str_uri =
     let aux () =
+      lwt dbh = Postgres.connect () in
       let uri = Ptype.uri_of_string content_str_uri in
       try_lwt
         let lwt_body = Preadability.get_readability_body uri in
         lwt content = Postgres.Content.get dbh uri in
         lwt body = lwt_body in
+        lwt () = Postgres.close dbh in
         Lwt.return (full_assoc (content, body))
       with Not_found -> Lwt.return `Null
       in
@@ -68,8 +68,10 @@ struct
 
   let list () =
     let aux () =
+      lwt dbh = Postgres.connect () in
       lwt results = Postgres.Content.list dbh in
       let json = List.map assoc results in
+      lwt () = Postgres.close dbh in
       Lwt.return (`List json)
     in
     Tools.check_return ~param_name:Tools.contents_ret_name aux
@@ -77,11 +79,16 @@ struct
   let search research =
     let compressed_search = Str.global_replace (Str.regexp " ") "" research in
     let aux () =
+      lwt dbh = Postgres.connect () in
       let research = cut_research research in
       let length = deep_cout research in
-      if length <= 2 then Lwt.return `Null else
+      if length <= 2 then
+        lwt () = Postgres.close dbh in
+        Lwt.return `Null
+      else
         lwt results = Postgres.Content.search dbh research in
         let json = List.map assoc results in
+        lwt () = Postgres.close dbh in
         Lwt.return (`List json)
     in
     if (String.length compressed_search == 0)
@@ -92,6 +99,7 @@ struct
 
   let insert content_str_uri title summary tags =
     let aux () =
+      lwt dbh = Postgres.connect () in
       let uri = Ptype.uri_of_string content_str_uri in
       let default_user_mark = 0. in
       let content = (uri, title, summary) in
@@ -104,6 +112,7 @@ struct
           (fun (s, m) -> Postgres.Tag.insert dbh (uri, s, m)) tags
       in
       lwt tag_ids = Lwt_list.map_s_exc Lwt_list.wait lwt_tag_ids in
+      lwt () = Postgres.close dbh in
       Lwt.return (`String (Ptype.string_of_uri returned_uri))
     in
     Tools.check_return
@@ -112,11 +121,13 @@ struct
 
   let delete content_uris =
     let aux () =
+      lwt dbh = Postgres.connect () in
       let uris = List.map Ptype.uri_of_string content_uris in
       lwt returned_uris = Postgres.Content.delete dbh uris in
       let json_list = List.map (fun u -> `String (Ptype.string_of_uri u))
         returned_uris
       in
+      lwt () = Postgres.close dbh in
       Lwt.return (`List json_list)
     in
     Tools.check_return aux
@@ -136,21 +147,28 @@ struct
 
   let list_from_content content_str_uri =
     let aux () =
+      lwt dbh = Postgres.connect () in
       let content_uri = Ptype.uri_of_string content_str_uri in
       lwt tags = Postgres.Tag.list_by_content_uri dbh content_uri in
       if List.length tags = 0 then PumBot.launch [content_uri];
       let result = `List (List.map format tags) in
+      lwt () = Postgres.close dbh in
       Lwt.return result
     in
     Tools.check_return ~param_name:Tools.tags_ret_name aux
 
   let search research =
     let aux () =
+      lwt dbh = Postgres.connect () in
       let research = cut_research research in
       let length = deep_cout research in
-      if length <= 2 then Lwt.return `Null else
+      if length <= 2 then
+        lwt () = Postgres.close dbh in
+        Lwt.return `Null
+      else
         lwt tags = Postgres.Tag.search dbh research in
         let json = `List (List.map format tags) in
+        lwt () = Postgres.close dbh in
         Lwt.return json
     in
     Tools.check_return ~param_name:Tools.tags_ret_name aux
@@ -181,27 +199,33 @@ struct
 
   let get_detail link_id =
     let aux () =
+      lwt dbh = Postgres.connect () in
       lwt result = Postgres.LinkedContent.get dbh link_id in
+      lwt () = Postgres.close dbh in
       Lwt.return (full_assoc result)
     in
     Tools.check_return ~param_name:Tools.links_ret_name aux
 
   let list_from_content str_content_uri =
     let aux () =
+      lwt dbh = Postgres.connect () in
       let uri = Ptype.uri_of_string str_content_uri in
       lwt results = Postgres.LinkedContent.list_by_content_uri dbh uri in
       let list = List.map assoc results in
       if List.length list = 0 then PumBot.launch [uri];
+      lwt () = Postgres.close dbh in
       Lwt.return (`List list)
     in
     Tools.check_return ~param_name:Tools.links_ret_name aux
 
   let list_from_content_tags str_content_uri subjects =
     let aux () =
+      lwt dbh = Postgres.connect () in
       let uri = Ptype.uri_of_string str_content_uri in
       lwt results = Postgres.LinkedContent.list_by_content_tag dbh uri subjects in
       let list = List.map assoc results in
       if List.length list = 0 then PumBot.launch [uri];
+      lwt () = Postgres.close dbh in
       Lwt.return (`List list)
     in
     Tools.check_return ~param_name:Tools.links_ret_name aux
@@ -209,6 +233,7 @@ struct
   let search content_uri research =
     let compressed_search = Str.global_replace (Str.regexp " ") "" research in
     let aux () =
+      lwt dbh = Postgres.connect () in
       let research = cut_research research in
       let content_uri = Ptype.uri_of_string content_uri in
       let length = deep_cout research in
@@ -217,6 +242,7 @@ struct
           else Postgres.LinkedContent.search dbh content_uri research
       in
       let json = List.map assoc results in
+      lwt () = Postgres.close dbh in
       Lwt.return (`List json)
     in
     if (String.length compressed_search == 0)
@@ -259,6 +285,7 @@ struct
 
   let insert links =
     let aux () =
+      lwt dbh = Postgres.connect () in
       let one (str_origin_uri, str_target_uri, nature, mark) =
         let origin_uri = Ptype.uri_of_string str_origin_uri in
         let target_uri = Ptype.uri_of_string str_target_uri in
@@ -268,14 +295,17 @@ struct
       lwt lwt_link_ids = Lwt_list.map_exc one links in
       lwt link_ids = Lwt_list.map_s_exc Lwt_list.wait lwt_link_ids in
       let list = List.map (fun x -> `Int x) link_ids in
+      lwt () = Postgres.close dbh in
       Lwt.return (`List list)
     in
     Tools.check_return ~param_name:Tools.links_ret_name aux
 
   let delete links_id =
     let aux () =
+      lwt dbh = Postgres.connect () in
       lwt links_id = Postgres.Link.delete dbh links_id in
       let list = List.map (fun x -> `Int x) links_id in
+      lwt () = Postgres.close dbh in
       Lwt.return (`List list)
     in
     Tools.check_return aux
