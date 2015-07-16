@@ -45,20 +45,47 @@ struct
 
   let connections = Queue.create ()
 
+  let exists n =
+    let compute p' c' =
+      p' >>= fun p -> c' >>= fun (n2, c2) -> Lwt.return (p || n2 == n)
+    in
+    Queue.fold compute (Lwt.return false) connections
+
+  let put (n, c) =
+    lwt e = exists n in
+    if not e then
+      begin
+        print_endline ("put "^ (string_of_int n) ^" : "^
+                          string_of_int (Queue.length connections));
+        Queue.add (Lwt.return (n, c)) connections;
+        Lwt.return ()
+      end
+    else Lwt.return ()
+
+  let timeout (n, c) =
+    Lwt.async (fun () -> Lwt_unix.sleep 2. >>= fun () ->
+      lwt e = exists n in
+      if not e
+      then begin print_endline ("timeout "^ (string_of_int n)); put (n, c) end
+      else Lwt.return ())
+
   let rec get () =
-    print_endline ("get: " ^ string_of_int (Queue.length connections));
-    try Queue.take connections
-    with Queue.Empty -> Lwt_unix.sleep 0.01 >>= get
+    try
+      lwt (n, c) = Queue.take connections in
+      print_endline ("get "^ (string_of_int n) ^" : "^
+                        string_of_int (Queue.length connections));
+      begin timeout (n, c); Lwt.return (n, c) end
+    with Queue.Empty ->
+      print_endline ("empty get");
+      Lwt_unix.sleep 0.01 >>= get
 
-  let put c =
-    print_endline ("get: " ^ string_of_int (Queue.length connections));
-    Lwt.return (Queue.add (Lwt.return c) connections)
-
-  let fill n = Utils.repeat n (fun () -> Queue.add (Postgres.connect ()) connections)
+  let fill n =
+    let connect n = Postgres.connect () >>= fun c -> Lwt.return (n, c) in
+    Utils.repeat n (fun n -> Queue.add (connect n) connections)
 
 end
 
-let () = Connector.fill 10
+let () = Connector.fill 20
 
 (******************************************************************************
 *********************************** Content ***********************************
@@ -81,14 +108,14 @@ struct
   let get_detail content_str_uri =
     let aux () =
       let uri = Ptype.uri_of_string content_str_uri in
-      lwt dbh = Connector.get () in
+      lwt cid, dbh = Connector.get () in
       lwt res = try_lwt
         let lwt_body = Preadability.get_readability_body uri in
         lwt content = Postgres.Content.get dbh uri in
         lwt body = lwt_body in
         Lwt.return (full_assoc (content, body))
       with Not_found -> Lwt.return `Null in
-      lwt () = Connector.put dbh in
+      lwt () = Connector.put (cid, dbh) in
       Lwt.return res
     in
     Tools.check_return ~param_name:Tools.contents_ret_name aux
@@ -96,13 +123,13 @@ struct
   let list () =
     let aux () =
       print_endline "List";
-      lwt dbh = Connector.get () in
+      lwt cid, dbh = Connector.get () in
       print_endline "Connected";
       lwt results = Postgres.Content.list dbh in
       print_endline "Answred";
       let json = List.map assoc results in
       print_endline "Formated";
-      lwt () = Connector.put dbh in
+      lwt () = Connector.put (cid, dbh) in
       print_endline "Closed";
       Lwt.return (`List json)
     in
@@ -114,10 +141,10 @@ struct
       let research = cut_research research in
       let length = deep_cout research in
       if length <= 2 then Lwt.return `Null else
-        lwt dbh = Connector.get () in
+        lwt cid, dbh = Connector.get () in
         lwt results = Postgres.Content.search dbh research in
         let json = List.map assoc results in
-        lwt () = Connector.put dbh in
+        lwt () = Connector.put (cid, dbh) in
         Lwt.return (`List json)
     in
     if (String.length compressed_search == 0)
@@ -128,7 +155,7 @@ struct
 
   let insert content_str_uri title summary tags =
     let aux () =
-      lwt dbh = Connector.get () in
+      lwt cid, dbh = Connector.get () in
       let uri = Ptype.uri_of_string content_str_uri in
       let default_user_mark = 0. in
       let content = (uri, title, summary) in
@@ -141,7 +168,7 @@ struct
           (fun (s, m) -> Postgres.Tag.insert dbh (uri, s, m)) tags
       in
       lwt tag_ids = Lwt_list.map_s_exc Lwt_list.wait lwt_tag_ids in
-      lwt () = Connector.put dbh in
+      lwt () = Connector.put (cid, dbh) in
       Lwt.return (`String (Ptype.string_of_uri returned_uri))
     in
     Tools.check_return
@@ -150,13 +177,13 @@ struct
 
   let delete content_uris =
     let aux () =
-      lwt dbh = Connector.get () in
+      lwt cid, dbh = Connector.get () in
       let uris = List.map Ptype.uri_of_string content_uris in
       lwt returned_uris = Postgres.Content.delete dbh uris in
       let json_list = List.map (fun u -> `String (Ptype.string_of_uri u))
         returned_uris
       in
-      lwt () = Connector.put dbh in
+      lwt () = Connector.put (cid, dbh) in
       Lwt.return (`List json_list)
     in
     Tools.check_return aux
@@ -176,12 +203,12 @@ struct
 
   let list_from_content content_str_uri =
     let aux () =
-      lwt dbh = Connector.get () in
+      lwt cid, dbh = Connector.get () in
       let content_uri = Ptype.uri_of_string content_str_uri in
       lwt tags = Postgres.Tag.list_by_content_uri dbh content_uri in
       if List.length tags = 0 then PumBot.launch [content_uri];
       let result = `List (List.map format tags) in
-      lwt () = Connector.put dbh in
+      lwt () = Connector.put (cid, dbh) in
       Lwt.return result
     in
     Tools.check_return ~param_name:Tools.tags_ret_name aux
@@ -191,10 +218,10 @@ struct
       let research = cut_research research in
       let length = deep_cout research in
       if length <= 2 then Lwt.return `Null else
-        lwt dbh = Connector.get () in
+        lwt cid, dbh = Connector.get () in
         lwt tags = Postgres.Tag.search dbh research in
         let json = `List (List.map format tags) in
-        lwt () = Connector.put dbh in
+        lwt () = Connector.put (cid, dbh) in
         Lwt.return json
     in
     Tools.check_return ~param_name:Tools.tags_ret_name aux
@@ -225,33 +252,33 @@ struct
 
   let get_detail link_id =
     let aux () =
-      lwt dbh = Connector.get () in
+      lwt cid, dbh = Connector.get () in
       lwt result = Postgres.LinkedContent.get dbh link_id in
-      lwt () = Connector.put dbh in
+      lwt () = Connector.put (cid, dbh) in
       Lwt.return (full_assoc result)
     in
     Tools.check_return ~param_name:Tools.links_ret_name aux
 
   let list_from_content str_content_uri =
     let aux () =
-      lwt dbh = Connector.get () in
+      lwt cid, dbh = Connector.get () in
       let uri = Ptype.uri_of_string str_content_uri in
       lwt results = Postgres.LinkedContent.list_by_content_uri dbh uri in
       let list = List.map assoc results in
       if List.length list = 0 then PumBot.launch [uri];
-      lwt () = Connector.put dbh in
+      lwt () = Connector.put (cid, dbh) in
       Lwt.return (`List list)
     in
     Tools.check_return ~param_name:Tools.links_ret_name aux
 
   let list_from_content_tags str_content_uri subjects =
     let aux () =
-      lwt dbh = Connector.get () in
+      lwt cid, dbh = Connector.get () in
       let uri = Ptype.uri_of_string str_content_uri in
       lwt results = Postgres.LinkedContent.list_by_content_tag dbh uri subjects in
       let list = List.map assoc results in
       if List.length list = 0 then PumBot.launch [uri];
-      lwt () = Connector.put dbh in
+      lwt () = Connector.put (cid, dbh) in
       Lwt.return (`List list)
     in
     Tools.check_return ~param_name:Tools.links_ret_name aux
@@ -259,7 +286,7 @@ struct
   let search content_uri research =
     let compressed_search = Str.global_replace (Str.regexp " ") "" research in
     let aux () =
-      lwt dbh = Connector.get () in
+      lwt cid, dbh = Connector.get () in
       let research = cut_research research in
       let content_uri = Ptype.uri_of_string content_uri in
       let length = deep_cout research in
@@ -268,7 +295,7 @@ struct
           else Postgres.LinkedContent.search dbh content_uri research
       in
       let json = List.map assoc results in
-      lwt () = Connector.put dbh in
+      lwt () = Connector.put (cid, dbh) in
       Lwt.return (`List json)
     in
     if (String.length compressed_search == 0)
@@ -311,7 +338,7 @@ struct
 
   let insert links =
     let aux () =
-      lwt dbh = Connector.get () in
+      lwt cid, dbh = Connector.get () in
       let one (str_origin_uri, str_target_uri, nature, mark) =
         let origin_uri = Ptype.uri_of_string str_origin_uri in
         let target_uri = Ptype.uri_of_string str_target_uri in
@@ -321,17 +348,17 @@ struct
       lwt lwt_link_ids = Lwt_list.map_exc one links in
       lwt link_ids = Lwt_list.map_s_exc Lwt_list.wait lwt_link_ids in
       let list = List.map (fun x -> `Int x) link_ids in
-      lwt () = Connector.put dbh in
+      lwt () = Connector.put (cid, dbh) in
       Lwt.return (`List list)
     in
     Tools.check_return ~param_name:Tools.links_ret_name aux
 
   let delete links_id =
     let aux () =
-      lwt dbh = Connector.get () in
+      lwt cid, dbh = Connector.get () in
       lwt links_id = Postgres.Link.delete dbh links_id in
       let list = List.map (fun x -> `Int x) links_id in
-      lwt () = Connector.put dbh in
+      lwt () = Connector.put (cid, dbh) in
       Lwt.return (`List list)
     in
     Tools.check_return aux
