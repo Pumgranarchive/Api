@@ -3,7 +3,7 @@
 #           SETTINGS FOR THE ELIOM PROJECT pumgrana
 #----------------------------------------------------------------------
 
-PROJECT_NAME := pumgrana_api
+PROJECT_NAME := pumgrana
 
 # Source files for the server
 SERVER_FILES := $(wildcard *.eliomi *.eliom)
@@ -14,8 +14,7 @@ CLIENT_FILES := $(wildcard *.eliomi *.eliom)
 SERVER_FILES_DOC :=     $(wildcard *.eliomi)
 
 # Source files for the client
-CLIENT_FILES_DOC :=     conf.eliomi         \
-                        nosql_store.eliomi      \
+CLIENT_FILES_DOC :=     nosql_store.eliomi      \
                         rdf_store.eliomi
 
 # OCamlfind packages for the server

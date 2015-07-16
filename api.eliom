@@ -63,7 +63,8 @@ struct
     else Lwt.return ()
 
   let timeout (n, c) =
-    Lwt.async (fun () -> Lwt_unix.sleep 2. >>= fun () ->
+    Lwt.async (fun () ->
+      Lwt_unix.sleep Conf.Configuration.Api.timeout >>= fun () ->
       lwt e = exists n in
       if not e
       then begin print_endline ("timeout "^ (string_of_int n)); put (n, c) end
@@ -85,7 +86,7 @@ struct
 
 end
 
-let () = Connector.fill 20
+let () = Connector.fill Conf.Configuration.Postgres.maxconnections
 
 (******************************************************************************
 *********************************** Content ***********************************

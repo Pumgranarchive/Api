@@ -21,8 +21,18 @@
     <host hostfilter="*">
       <static dir="%%STATICDIR%%" />
       <static dir="%%ELIOMSTATICDIR%%" />
-      <eliommodule module="%%LIBDIR%%/%%PROJECT_NAME%%.cma" />
-      <eliom/>
+      <eliom module="%%LIBDIR%%/%%PROJECT_NAME%%.cma">
+         <postgresql>
+            <host></host>
+            <user>nox</user>
+            <pwd></pwd>
+            <dbname>nox</dbname>
+            <maxconnections>20</maxconnections>
+         </postgresql>
+         <api>
+            <timeout>2.00</timeout>
+         </api>
+      </eliom>
     </host>
   </server>
 </ocsigen>

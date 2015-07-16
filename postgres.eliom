@@ -7,6 +7,8 @@
 ******************************* Configuration *********************************
 *******************************************************************************)
 
+module Configuration = Conf.Configuration
+
 let _ = Random.self_init ()
 
 module Lwt_thread = struct
@@ -69,10 +71,10 @@ module Pg =
 struct
 
   let connect () = Lwt_PGOCaml.connect
-    (* ~host:"127.0.0.1" *)
-    ~user:"nox"
-    (* ~password:"1234" *)
-    ~database:"nox"
+    ?host:Configuration.Postgres.host
+    ~user:Configuration.Postgres.user
+    ?password:Configuration.Postgres.pwd
+    ~database:Configuration.Postgres.db
     ()
 
   let close dbh =
