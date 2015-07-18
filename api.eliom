@@ -167,10 +167,9 @@ struct
         try_lwt Postgres.Content.insert dbh full_content
         with _ -> Postgres.Content.update dbh content
       in
-      lwt lwt_tag_ids = Lwt_list.map_exc
-          (fun (s, m) -> Postgres.Tag.insert dbh (uri, s, m)) tags
-      in
-      lwt tag_ids = Lwt_list.map_s_exc Lwt_list.wait lwt_tag_ids in
+      let format_tag (subject, mark) = uri, subject, mark in
+      let formated_tags = List.map format_tag tags in
+      lwt tag_ids = Postgres.Tag.inserts dbh formated_tags in
       lwt () = Connector.put "Content.insert" (cid, dbh) in
       Lwt.return (`String (Ptype.string_of_uri returned_uri))
     in
@@ -342,14 +341,15 @@ struct
   let insert links =
     let aux () =
       lwt cid, dbh = Connector.get "Link.insert" in
-      let one (str_origin_uri, str_target_uri, nature, mark) =
+      let format (str_origin_uri, str_target_uri, nature, mark) =
         let origin_uri = Ptype.uri_of_string str_origin_uri in
         let target_uri = Ptype.uri_of_string str_target_uri in
-        let link = (origin_uri, target_uri, nature, mark, 0.) in
-        Postgres.Link.insert dbh link
+        (origin_uri, target_uri, nature, mark, 0.)
       in
-      lwt lwt_link_ids = Lwt_list.map_exc one links in
-      lwt link_ids = Lwt_list.map_s_exc Lwt_list.wait lwt_link_ids in
+      (* lwt lwt_link_ids = Lwt_list.map_exc one links in *)
+      (* lwt link_ids = Lwt_list.map_s_exc Lwt_list.wait lwt_link_ids in *)
+      let formated_links = List.map format links in
+      lwt link_ids = Postgres.Link.inserts dbh formated_links in
       let list = List.map (fun x -> `Int x) link_ids in
       lwt () = Connector.put "Link.insert" (cid, dbh) in
       Lwt.return (`List list)

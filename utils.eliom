@@ -4,6 +4,9 @@
 
 let rec repeat n func = if (n > 0) then begin func n; repeat (n - 1) func end
 
+(** Add at the end  *)
+let (@@) list elem = list@[elem]
+
 (******************************************************************************
 ********************************** Modules ************************************
 *******************************************************************************)
@@ -70,10 +73,6 @@ struct
       else e::list
     in
     List.fold_left add l1 l2
-
-  (** Add at the end  *)
-  let (@@) list elem =
-    list@[elem]
 
 end
 

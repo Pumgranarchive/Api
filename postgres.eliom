@@ -7,9 +7,10 @@
 ******************************* Configuration *********************************
 *******************************************************************************)
 
+open Utils
 module Configuration = Conf.Configuration
 
-let _ = Random.self_init ()
+let () = Random.self_init ()
 
 module Lwt_thread = struct
   include Lwt
@@ -93,6 +94,18 @@ struct
   let execute dbh name params =
     (* print_endline ("\nExecute:: " ^ name); *)
     (* List.iter (fun x -> match x with | Some x -> print_endline x | _ -> ()) params; *)
+    PGOCaml.execute dbh ~name ~params ()
+
+  let (^^) a b = a ^ "_" ^ b
+
+  let runtime_execute dbh query params =
+    (* print_endline ("\nRuntime Execute:: " ^ name); *)
+    (* List.iter (fun x -> match x with | Some x -> print_endline x | _ -> ()) params; *)
+    let ts = int_of_float (Unix.time ()) in
+    let id = Int64.to_int (Random.int64 (Int64.of_int 10000000)) in
+    let name = "runtime" ^^ (string_of_int ts) ^^ (string_of_int id) in
+    print_endline ("\nRuntime query"^ name ^"\n"^ query ^"\n");
+    lwt () = PGOCaml.prepare dbh ~query ~name () in
     PGOCaml.execute dbh ~name ~params ()
 
 end
@@ -328,11 +341,18 @@ struct
     let limit = "LIMIT" ^^ (string_of_int max_size) in
     select ^^ from ^^ where ^^ group_by ^^ order_by ^^ limit
 
-  let insert ?first_default format table returns =
+  let insert ?first_default format ?(values_nb=1) table returns =
     let length = List.length format in
+    let stop = 1 + length * values_nb in
+    let rec dollars_manager pos dollars =
+      if pos >= stop then dollars else
+        let sep = if String.length dollars > 0 then ", " else "" in
+        let dollars' = (Util.dollar_generator ?first_default pos length) in
+        dollars_manager (pos + length) (dollars ^ sep ^ dollars')
+    in
     let str_format = Util.string_of_format format in
-    let insert = "INSERT INTO"^^table^^"("^str_format^")" in
-    let values = "VALUES" ^^ (Util.dollar_generator ?first_default 1 length) in
+    let insert = "INSERT INTO" ^^ table ^^ "("^str_format^")" in
+    let values = "VALUES" ^^ (dollars_manager 1 "") in
     let returning = "RETURNING" ^^ (String.concat ", " returns) in
     insert ^^ values ^^ returning
 
@@ -594,9 +614,11 @@ struct
       Query.select Format.Get.tag Table.([tag]) contitions
         ~distinct_keys ~group_keys ~order_keys Conf.limit
 
-    let insert () =
+    let runtime_insert ?values_nb () =
       let returns = ["tag_id"] in
-      Query.insert Format.Insert.tag Table.tag returns
+      Query.insert Format.Insert.tag ?values_nb Table.tag returns
+
+    let insert () = runtime_insert ()
 
     let update () =
       let contitions = Query.([(Nop, "tag_id", Value)]) in
@@ -654,6 +676,18 @@ struct
     if List.length results = 0 then raise Not_found
     else Lwt.return (Row.to_tag_id (List.hd results))
 
+  let inserts dbh tags =
+    let params_manager tags (content_uri, subject, mark)=
+      Query.([Uri content_uri; String subject; Float mark]) @ tags
+    in
+    let values_nb = List.length tags in
+    let formated_tags = List.fold_left params_manager [] tags in
+    let params = Query.Util.param_generator formated_tags in
+    let query = QueryGen.runtime_insert ~values_nb () in
+    lwt results = Pg.runtime_execute dbh query params in
+    if List.length results = 0 then raise Not_found
+    else Lwt.return (List.map Row.to_tag_id results)
+
   let update dbh id (content_uri, subject, mark) =
     let params = Query.Util.param_generator
       Query.([Uri content_uri; String subject; Float mark; Id id])
@@ -709,9 +743,11 @@ struct
   module QueryGen =
   struct
 
-    let insert () =
+    let runtime_insert ?values_nb () =
       let returns = ["link_id"] in
-      Query.insert Format.Insert.link Table.link returns
+      Query.insert Format.Insert.link ?values_nb Table.link returns
+
+    let insert () = runtime_insert ()
 
     let update () =
       let contitions = Query.([(Nop, "link_id", Value)]) in
@@ -745,6 +781,19 @@ struct
     lwt results = Pg.execute dbh QueryName.insert params in
     if List.length results = 0 then raise Not_found
     else Lwt.return (Row.to_link_id (List.hd results))
+
+  let inserts dbh links =
+    let params_manager list (origin_uri, target_uri, nature, mark, user_mark) =
+      Query.([Uri origin_uri; Uri target_uri; String nature;
+              Float mark; Float user_mark]) @ list
+    in
+    let values_nb = List.length links in
+    let formated_links = List.fold_left params_manager [] links in
+    let params = Query.Util.param_generator formated_links in
+    let runtime_query = QueryGen.runtime_insert ~values_nb () in
+    lwt results = Pg.runtime_execute dbh runtime_query params in
+    if List.length results = 0 then raise Not_found
+    else Lwt.return (List.map Row.to_link_id results)
 
   let update dbh id (origin_uri, target_uri, nature, mark) =
     let params = Query.Util.param_generator

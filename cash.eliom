@@ -27,7 +27,7 @@ struct
 
   (** Update the access time on the given key  *)
   let access table history key =
-    let open Utils.List in
+    let open Utils in
     let now = Unix.time () in
     let remove_duplicate k new_history (time, key) =
       if (String.compare k key) == 0
@@ -35,7 +35,7 @@ struct
       else new_history@@(time, key)
     in
     let cleaned_history = List.fold_left (remove_duplicate key) [] !history in
-    history := cleaned_history@@(now, key);
+    history := cleaned_history @@ (now, key);
     Lwt.return ()
 
   (** Pull the oldest access key to the table *)
