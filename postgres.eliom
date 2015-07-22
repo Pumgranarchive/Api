@@ -240,17 +240,17 @@ struct
   | ASC of string
   | DESC of string
 
-  type operator = Nop | And | Or
+  type operator2 =
+  | And of ((string * where) * operator2)
+  | Or of ((string * where) * operator2)
+  | End
 
-  type condition = (operator * string * where) list
+  type operator =
+  | First of ((string * where) * operator2)
+  | All
 
   module Util =
   struct
-
-    let string_of_operator = function
-      | Nop  -> ""
-      | And   -> " AND"
-      | Or    -> " OR"
 
     let string_of_format format =
       String.concat ", " format
@@ -288,29 +288,49 @@ struct
       let str = String.concat ", " dollars in
       "(" ^ str ^ ")"
 
-    let where_generator value_num conditions =
-      let aux where name op value_num =
-        let dollar = dollar_generator value_num 1 in
-        where ^^ name ^^ op ^^ dollar, value_num + 1
+    let where_generator dollar_num conditions =
+
+      let rec close_bracket n =
+        if n <= 0 then "" else ")" ^ (close_bracket (n -1))
       in
+
+      let to_string (old_where, outer_op) name inner_op dollar_num =
+        let dollar = dollar_generator dollar_num 1 in
+        old_where ^^ outer_op ^^ "(" ^ name ^^ inner_op ^^ dollar,
+        dollar_num + 1
+      in
+      let dep_to_string (old_where, outer_op) name dep dollar_num =
+        old_where ^^ outer_op ^^ "(" ^ name ^^ "=" ^^ dep, dollar_num
+      in
+
       let lower str = "LOWER("^str^")" in
       let as_text str = "CAST("^str^" AS text)" in
-      let aux (where, value_num) (operator, name, value_type) =
-        let length = String.length where in
-        if length = 0 && operator != Nop
-        then raise (Invalid_argument "The first operator should be None");
-        if length > 0 && operator = Nop
-        then raise (Invalid_argument "Only the first operator should be None");
-        let sep = string_of_operator operator in
-        let where = where ^ sep in
-        match value_type with
-        | Depend dep -> where ^^ name ^^ "=" ^^ dep, value_num
-        | Value      -> aux where name "IN" value_num
-        | Values     -> aux where (as_text name) "SIMILAR TO" value_num
-        | Regexp     -> aux where (lower name) "SIMILAR TO" value_num
+      let builder data name dollar_num = function
+        | Depend dep -> dep_to_string data name dep dollar_num
+        | Value      -> to_string data name "IN" dollar_num
+        | Values     -> to_string data (as_text name) "SIMILAR TO" dollar_num
+        | Regexp     -> to_string data (lower name) "SIMILAR TO" dollar_num
       in
-      let where, _ = List.fold_left aux ("", value_num + 1) conditions in
-      if String.length where = 0 then "" else "WHERE" ^ where
+
+      let rec fold (old_where, dollar_num, num) conditions =
+        let loop outer_op name value_type next =
+          let data = old_where, outer_op in
+          let where', dollar_num' = builder data name dollar_num value_type in
+          fold (where', dollar_num', num + 1) next
+        in
+        match conditions with
+        | End -> old_where, num
+        | And ((name, value_type), next) -> loop "AND" name value_type next
+        | Or ((name, value_type), next) -> loop "OR" name value_type next
+      in
+
+      let init = ("", "") in
+      match conditions with
+      | All -> ""
+      | First ((name, value_type), next) ->
+        let first, dollar_num' = builder init name (dollar_num + 1) value_type in
+        let where, brackets = fold (first, dollar_num', 1) next in
+        "WHERE" ^ where ^ (close_bracket brackets)
 
     let distinct_generator = function
       | None -> ""
@@ -442,21 +462,20 @@ struct
   struct
 
     let get () =
-      let contitions = Query.([(Nop, "content_uri", Value)]) in
+      let contitions = Query.(First (("content_uri", Value), End)) in
       let group_keys = ["content_uri"] in
       Query.select Format.Get.content [Table.content] contitions
         ~group_keys Conf.limit
 
     let list () =
       let group_keys = ["content_uri"] in
-      Query.select Format.Get.content [Table.content] []
+      Query.select Format.Get.content [Table.content] Query.All
         ~group_keys Conf.limit
 
     let list_by_subject () =
-      (* "SELECT content.content_uri, title, summary FROM content, tag WHERE content.content_uri = tag.content_uri AND CAST(subject AS text) SIMILAR TO ($1) ORDER BY mark DESC LIMIT 20" *)
       let contitions =
-        Query.([(Nop, "content.content_uri", Depend "tag.content_uri");
-                (And, "subject", Values)])
+        Query.(First (("content.content_uri", Depend "tag.content_uri"),
+               And (("subject", Values), End)))
       in
       let group_keys = ["content.content_uri"] in
       let order_keys = Query.([DESC "max(mark)"]) in
@@ -464,15 +483,17 @@ struct
         ~group_keys ~order_keys Conf.limit
 
     let search_by_title_and_summary () =
-      let contitions = Query.([(Nop, "title", Regexp); (Or, "summary", Regexp)]) in
+      let contitions = Query.(First (("title", Regexp),
+                              Or (("summary", Regexp), End)))
+      in
       let group_keys = ["content_uri"] in
       Query.select Format.Get.content Table.([content]) contitions
         ~group_keys Conf.limit
 
     let search_by_subject () =
       let contitions =
-        Query.([(Nop, "content.content_uri", Depend "tag.content_uri");
-                (And, "subject", Regexp)])
+        Query.(First (("content.content_uri", Depend "tag.content_uri"),
+               And (("subject", Regexp), End)))
       in
       let group_keys = ["content.content_uri"] in
       let order_keys = Query.([DESC "max(mark)"]) in
@@ -489,12 +510,12 @@ struct
       Query.insert Format.Insert.content Table.content returns
 
     let update () =
-      let contitions = Query.([(Nop, "content_uri", Value)]) in
+      let contitions = Query.(First (("content_uri", Value), End)) in
       let returns = ["content_uri"] in
       Query.update Format.Update.content Table.content contitions returns
 
     let delete () =
-      let contitions = Query.([(Nop, "content_uri", Values)]) in
+      let contitions = Query.(First (("content_uri", Values), End)) in
       let returns = ["content_uri"] in
       Query.delete Table.content contitions returns
 
@@ -609,7 +630,7 @@ struct
   struct
 
     let get () =
-      let contitions = Query.([(Nop, "tag_id", Value)]) in
+      let contitions = Query.(First (("tag_id", Value), End)) in
       let group_keys = ["tag_id"] in
       Query.select Format.Get.tag [Table.tag] contitions
         ~group_keys Conf.limit
@@ -617,18 +638,18 @@ struct
     let list () =
       let group_keys = ["tag_id"] in
       let order_keys = Query.([DESC "mark"]) in
-      Query.select Format.Get.tag [Table.tag] []
+      Query.select Format.Get.tag [Table.tag] Query.All
         ~group_keys ~order_keys Conf.limit
 
     let list_by_content_uri () =
-      let contitions = Query.([(Nop, "content_uri", Value)]) in
+      let contitions = Query.(First (("content_uri", Value), End)) in
       let group_keys = ["tag_id"] in
       let order_keys = Query.([DESC "mark"]) in
       Query.select Format.Get.tag Table.([tag]) contitions
         ~group_keys ~order_keys Conf.limit
 
     let search () =
-      let contitions = Query.([(Nop, "subject", Regexp)]) in
+      let contitions = Query.(First (("subject", Regexp), End)) in
       let distinct_keys = ["subject"] in
       let group_keys = ["tag_id"] in
       let order_keys = Query.([DESC "subject"; DESC "max(mark)"]) in
@@ -642,12 +663,12 @@ struct
     let insert () = runtime_insert ()
 
     let update () =
-      let contitions = Query.([(Nop, "tag_id", Value)]) in
+      let contitions = Query.(First (("tag_id", Value), End)) in
       let returns = ["tag_id"] in
       Query.update Format.Update.tag Table.tag contitions returns
 
     let delete () =
-      let contitions = Query.([(Nop, "tag_id", Values)]) in
+      let contitions = Query.(First (("tag_id", Values), End)) in
       let returns = ["tag_id"] in
       Query.delete Table.tag contitions returns
 
@@ -771,12 +792,12 @@ struct
     let insert () = runtime_insert ()
 
     let update () =
-      let contitions = Query.([(Nop, "link_id", Value)]) in
+      let contitions = Query.(First (("link_id", Value), End)) in
       let returns = ["link_id"] in
       Query.update Format.Update.link Table.link contitions returns
 
     let delete () =
-      let contitions = Query.([(Nop, "link_id", Values)]) in
+      let contitions = Query.(First (("link_id", Values), End)) in
       let returns = ["link_id"] in
       Query.delete Table.link contitions returns
 
@@ -878,8 +899,8 @@ struct
 
     let get () =
       let contitions =
-        Query.([(Nop, "content.content_uri", Depend "link.target_uri");
-                (And, "link_id", Value)])
+        Query.(First (("content.content_uri", Depend "link.target_uri"),
+               And (("link_id", Value), End)))
       in
       let tables = Table.([link; content]) in
       Query.select Format.Get.linked_content tables contitions
@@ -887,7 +908,7 @@ struct
 
     let list () =
       let contitions =
-        Query.([(Nop, "content.content_uri", Depend "link.target_uri")])
+        Query.(First (("content.content_uri", Depend "link.target_uri"), End))
       in
       let distinct_keys = Query.(["content.content_uri"]) in
       let tables = Table.([link; content]) in
@@ -897,8 +918,8 @@ struct
 
     let list_by_content_uri () =
       let contitions =
-        Query.([(Nop, "content.content_uri", Depend "link.target_uri");
-                (And, "origin_uri", Value)])
+        Query.(First (("content.content_uri", Depend "link.target_uri"),
+               And (("origin_uri", Value), End)))
       in
       let distinct_keys = Query.(["content.content_uri"]) in
       let tables = Table.([link; content]) in
@@ -908,10 +929,10 @@ struct
 
     let list_by_content_tag () =
       let contitions =
-        Query.([(Nop, "content.content_uri", Depend "link.target_uri");
-                (And, "tag.content_uri", Depend "link.target_uri");
-                (And, "origin_uri", Value);
-                (And, "subject", Values)])
+        Query.(First (("content.content_uri", Depend "link.target_uri"),
+               And (("tag.content_uri", Depend "link.target_uri"),
+               And (("origin_uri", Value),
+               And (("subject", Values), End)))))
       in
       let distinct_keys = Query.(["content.content_uri"]) in
       let order_keys = Query.([DESC "content.content_uri"; DESC "link.mark"]) in
@@ -923,8 +944,8 @@ struct
 
       (* SUB QUERY - Select linkedcontent *)
       let where' =
-        Query.([(Nop, "content.content_uri", Depend "link.target_uri");
-                (And, "origin_uri", Value)])
+        Query.(First (("content.content_uri", Depend "link.target_uri"),
+                      And (("origin_uri", Value), End)))
       in
       let tables' = Table.([content; link]) in
       let order_keys = Query.([DESC "link.mark"]) in
@@ -934,10 +955,10 @@ struct
 
       (* SECOND QUERY - filter on search field *)
       let where'' =
-        Query.([(Nop, "tag.content_uri", Depend "linkedcontent.content_uri");
-                (And, "subject", Regexp);
-                (Or, "title", Regexp);
-                (Or, "summary", Regexp)])
+        Query.(First (("tag.content_uri", Depend "linkedcontent.content_uri"),
+               And (("subject", Regexp),
+               Or (("title", Regexp),
+               Or (("summary", Regexp), End)))))
       in
       let format = ["link_id"; "nature"; "linkedcontent.mark"; "user_mark";
                     "linkedcontent.content_uri"; "title"; "summary"]
