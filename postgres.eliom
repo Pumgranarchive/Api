@@ -21,9 +21,17 @@ module PGOCaml = Lwt_PGOCaml
 
 module Table =
 struct
-  let content = "content"
-  let tag = "tag"
-  let link = "link"
+
+  type name = As of string
+
+  type t =
+  | Table of string
+  | Query of (string * name)
+
+  let content = Table "content"
+  let tag = Table "tag"
+  let link = Table "link"
+
 end
 
 module Conf =
@@ -326,6 +334,17 @@ struct
         if List.length keys == 0 then ""
         else "ORDER BY" ^^ (String.concat ", " (List.map string_of_order keys))
 
+    let from_generator tables =
+      let builder = function
+        | Table.Table table_name -> table_name
+        | Table.Query (query, Table.As as_name) -> "("^ query ^") AS "^ as_name
+      in
+      String.concat ", " (List.map builder tables)
+
+    let string_of_table = function
+      | Table.Table table_name -> table_name
+      | _ -> raise (Invalid_argument "Only table should be given")
+
   end
 
   let select ?distinct_keys format tables conditions ?(first_dollars=0)
@@ -334,7 +353,7 @@ struct
     then raise (Invalid_argument "from table could not be null");
     let distinct = Util.distinct_generator distinct_keys in
     let select = "SELECT" ^^ distinct ^^ (Util.string_of_format format) in
-    let from = "FROM" ^^ (String.concat ", " tables) in
+    let from = "FROM" ^^ (Util.from_generator tables) in
     let where = Util.where_generator first_dollars conditions in
     let group_by = Util.group_generator group_keys in
     let order_by = Util.order_generator order_keys in
@@ -353,13 +372,13 @@ struct
         dollars_manager (pos + length) (dollars ^ sep ^ dollars')
     in
     let str_format = Util.string_of_format format in
-    let insert = "INSERT INTO" ^^ table ^^ "("^str_format^")" in
+    let insert = "INSERT INTO"^^ (Util.string_of_table table) ^^"("^str_format^")" in
     let values = "VALUES" ^^ (dollars_manager 1 "") in
     let returning = "RETURNING" ^^ (String.concat ", " returns) in
     insert ^^ values ^^ returning
 
   let update format table conditions returns =
-    let update = "UPDATE" ^^ table in
+    let update = "UPDATE" ^^ (Util.string_of_table table) in
     let format_length = List.length format in
     let str_format = Util.string_of_format format in
     let dollars = (Util.dollar_generator 1 format_length) in
@@ -369,7 +388,7 @@ struct
     update ^^ values ^^ where ^^ returning
 
   let delete table conditions returns =
-    let delete = "DELETE FROM" ^^ table in
+    let delete = "DELETE FROM" ^^ (Util.string_of_table table) in
     let where = Util.where_generator 0 conditions in
     let returning = "RETURNING" ^^ (String.concat ", " returns) in
     delete ^^ where ^^ returning
@@ -912,7 +931,6 @@ struct
       let query' =
         Query.select Format.Get.linked_content tables' where' ~order_keys 0
       in
-      let subquery = "(" ^ query' ^ ") AS linkedcontent" in
 
       (* SECOND QUERY - filter on search field *)
       let where'' =
@@ -924,7 +942,7 @@ struct
       let format = ["link_id"; "nature"; "linkedcontent.mark"; "user_mark";
                     "linkedcontent.content_uri"; "title"; "summary"]
       in
-      let tables'' = Table.([subquery; tag]) in
+      let tables'' = Table.([Query (query', As "linkedcontent"); tag]) in
       let first_dollars = 1 in
       Query.select format tables'' where'' ~first_dollars Conf.limit
 
