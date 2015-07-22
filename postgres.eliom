@@ -328,17 +328,19 @@ struct
 
   end
 
-  let select ?distinct_keys format tables conditions ?group_keys ?order_keys
-      max_size =
+  let select ?distinct_keys format tables conditions ?(first_dollars=0)
+      ?group_keys ?order_keys max_size =
     if List.length tables < 1
     then raise (Invalid_argument "from table could not be null");
     let distinct = Util.distinct_generator distinct_keys in
     let select = "SELECT" ^^ distinct ^^ (Util.string_of_format format) in
     let from = "FROM" ^^ (String.concat ", " tables) in
-    let where = Util.where_generator 0 conditions in
+    let where = Util.where_generator first_dollars conditions in
     let group_by = Util.group_generator group_keys in
     let order_by = Util.order_generator order_keys in
-    let limit = "LIMIT" ^^ (string_of_int max_size) in
+    let limit =
+      if (max_size <= 0) then "" else ("LIMIT" ^^ (string_of_int max_size))
+    in
     select ^^ from ^^ where ^^ group_by ^^ order_by ^^ limit
 
   let insert ?first_default format ?(values_nb=1) table returns =
@@ -899,19 +901,32 @@ struct
         ~order_keys Conf.limit
 
     let search () =
-      let contitions =
-        Query.([(Nop, "tag.content_uri", Depend "link.target_uri");
-                (And, "content.content_uri", Depend "link.target_uri");
-                (And, "origin_uri", Value);
+
+      (* SUB QUERY - Select linkedcontent *)
+      let where' =
+        Query.([(Nop, "content.content_uri", Depend "link.target_uri");
+                (And, "origin_uri", Value)])
+      in
+      let tables' = Table.([content; link]) in
+      let order_keys = Query.([DESC "link.mark"]) in
+      let query' =
+        Query.select Format.Get.linked_content tables' where' ~order_keys 0
+      in
+      let subquery = "(" ^ query' ^ ") AS linkedcontent" in
+
+      (* SECOND QUERY - filter on search field *)
+      let where'' =
+        Query.([(Nop, "tag.content_uri", Depend "linkedcontent.content_uri");
                 (And, "subject", Regexp);
                 (Or, "title", Regexp);
                 (Or, "summary", Regexp)])
       in
-      let distinct_keys = Query.(["content.content_uri"]) in
-      let order_keys = Query.([DESC "content.content_uri"; DESC "link.mark"]) in
-      let tables = Table.([link; content; tag]) in
-      Query.select ~distinct_keys Format.Get.linked_content tables contitions
-        ~order_keys Conf.limit
+      let format = ["link_id"; "nature"; "linkedcontent.mark"; "user_mark";
+                    "linkedcontent.content_uri"; "title"; "summary"]
+      in
+      let tables'' = Table.([subquery; tag]) in
+      let first_dollars = 1 in
+      Query.select format tables'' where'' ~first_dollars Conf.limit
 
   end
 
