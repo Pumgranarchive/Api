@@ -25,6 +25,7 @@ struct
   type t =
   | NotFoundQuery of string
   | Error of (int * string)
+  | Unkown
 
   let space = Str.regexp "[ \t]+"
   let durty = Str.regexp "[:\\\"]+"
@@ -33,7 +34,8 @@ struct
     | PGOCaml.PostgreSQL_Error(error, _) ->
       (match Str.split space (Str.global_replace durty "" error) with
       | "ERROR" :: "26000" :: _ :: _ :: name :: _ -> NotFoundQuery name
-      | "ERROR" :: nb :: _ :: _ :: name :: _ -> Error (int_of_string nb, name))
+      | "ERROR" :: nb :: _ :: _ :: name :: _ -> Error (int_of_string nb, name)
+      | _ -> Unkown)
     | e -> raise e
 
 end
@@ -110,8 +112,8 @@ struct
     PGOCaml.close dbh
 
   let prepare dbh name query =
-    (* print_endline ("\nPrepare:: " ^ name); *)
-    (* print_endline query; *)
+    print_endline ("\nPrepare:: " ^ name);
+    print_endline query;
     PGOCaml.prepare dbh ~query ~name ()
 
   let prepare_list dbh list =
@@ -402,9 +404,11 @@ struct
     in
     select ^^ from ^^ where ^^ group_by ^^ order_by ^^ limit
 
-  let insert ?first_default format ?(values_nb=1) table returns =
+  let insert ?first_default format
+      ?(dollars_offset=1) ?(values_nb=1)
+      table returns =
     let length = List.length format in
-    let stop = 1 + length * values_nb in
+    let stop = dollars_offset + length * values_nb in
     let rec dollars_manager pos dollars =
       if pos >= stop then dollars else
         let sep = if String.length dollars > 0 then ", " else "" in
@@ -413,15 +417,15 @@ struct
     in
     let str_format = Util.string_of_format format in
     let insert = "INSERT INTO"^^ (Util.string_of_table table) ^^"("^str_format^")" in
-    let values = "VALUES" ^^ (dollars_manager 1 "") in
+    let values = "VALUES" ^^ (dollars_manager dollars_offset "") in
     let returning = "RETURNING" ^^ (String.concat ", " returns) in
     insert ^^ values ^^ returning
 
-  let update format table conditions returns =
+  let update format ?(dollars_offset=1) table conditions returns =
     let update = "UPDATE" ^^ (Util.string_of_table table) in
     let format_length = List.length format in
     let str_format = Util.string_of_format format in
-    let dollars = (Util.dollar_generator 1 format_length) in
+    let dollars = (Util.dollar_generator dollars_offset format_length) in
     let values = " SET (" ^  str_format ^ ") =" ^^ dollars in
     let where = Util.where_generator format_length conditions in
     let returning = "RETURNING" ^^ (String.concat ", " returns) in
@@ -437,6 +441,12 @@ struct
     let union = "(" ^ query1 ^") UNION (" ^ query2 ^ ")" in
     let limit = "LIMIT" ^^ (string_of_int max_size) in
     union ^^ limit
+
+  let if_not_found exists query1 query2 =
+    "IF EXISTS ("^ exists ^") "^
+    "THEN (" ^ query1 ^ ") "^
+    "ELSE (" ^ query2 ^ ") END IF;"
+    (* query1 ^ "; IF NOT FOUND THEN (" ^ query2 ^ "); END IF;" *)
 
 end
 
@@ -475,6 +485,7 @@ struct
     let search = "Content.Search"
     let insert = "Content.Insert"
     let update = "Content.Update"
+    let upsert = "Content.Upsert"
     let delete = "Content.Delete"
   end
 
@@ -525,14 +536,25 @@ struct
       let query2 = search_by_subject () in
       Query.union query1 query2 Conf.limit
 
-    let insert () =
+    let base_insert ?dollars_offset () =
       let returns = ["content_uri"] in
-      Query.insert Format.Insert.content Table.content returns
+      Query.insert Format.Insert.content ?dollars_offset Table.content returns
 
-    let update () =
+    let insert () = base_insert ()
+
+    let base_update ?dollars_offset () =
       let contitions = Query.(First (("content_uri", Value), End)) in
       let returns = ["content_uri"] in
-      Query.update Format.Update.content Table.content contitions returns
+      Query.update Format.Update.content ?dollars_offset
+        Table.content contitions returns
+
+    let update () = base_update ()
+
+    let upsert () =
+      let exists_query = get () in
+      let update_query = base_update ~dollars_offset:2 () in
+      let insert_query = base_insert ~dollars_offset:6 () in
+      Query.if_not_found exists_query update_query insert_query
 
     let delete () =
       let contitions = Query.(First (("content_uri", Values), End)) in
@@ -553,6 +575,7 @@ struct
        QueryName.search,                      QueryGen.search;
        QueryName.insert,                      QueryGen.insert;
        QueryName.update,                      QueryGen.update;
+       (* QueryName.upsert,                      QueryGen.upsert; *)
        QueryName.delete,                      QueryGen.delete]
 
     let all dbh = Pg.prepare_list dbh list
@@ -603,6 +626,16 @@ struct
               Uri content_uri])
     in
     lwt results = Pg.execute dbh QueryName.update params in
+    if List.length results = 0 then raise Not_found
+    else Lwt.return (Row.to_content_uri (List.hd results))
+
+  let upsert dbh (content_uri, title, summary, user_mark) =
+    let params = Query.Util.param_generator
+      Query.([Uri content_uri;
+              Uri content_uri; String title; String summary; Uri content_uri;
+              Uri content_uri; String title; String summary; Float user_mark])
+    in
+    lwt results = Pg.execute dbh QueryName.upsert params in
     if List.length results = 0 then raise Not_found
     else Lwt.return (Row.to_content_uri (List.hd results))
 
