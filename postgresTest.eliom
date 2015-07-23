@@ -153,7 +153,7 @@ let main () =
   in
 
   lwt () = wrap_try "Tag.Insert" (fun name ->
-    lwt id' = Postgres.Tag.insert dbh tag_1 in
+    lwt id' = Utils.Lwt_list.hd (Postgres.Tag.inserts dbh [tag_1]) in
     let () = set_id id' in
     let full_tag_1 = add_id id' tag_1 in
     lwt tag' = Postgres.Tag.get dbh id' in
@@ -270,10 +270,10 @@ let main () =
   in
 
   lwt () = wrap_try "Link.Insert" (fun name ->
-    lwt tag_id = Postgres.Tag.insert dbh tag_2 in
+    lwt tag_id = Utils.Lwt_list.hd (Postgres.Tag.inserts dbh [tag_2]) in
     let () = set_id tag_id in
     lwt _ = Postgres.Content.insert dbh content_3 in
-    lwt id' = Postgres.Link.insert dbh link_1 in
+    lwt id' = Utils.Lwt_list.hd (Postgres.Link.inserts dbh [link_1]) in
     let () = set_link_id id' in
     lwt link' = Postgres.LinkedContent.get dbh id' in
     let full_link_1 = add_link_id id' linked_content_1 in

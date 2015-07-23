@@ -19,10 +19,30 @@ end
 module Lwt_PGOCaml = PGOCaml_generic.Make(Lwt_thread)
 module PGOCaml = Lwt_PGOCaml
 
+module Error =
+struct
+
+  type t =
+  | NotFoundQuery of string
+  | Error of (int * string)
+
+  let space = Str.regexp "[ \t]+"
+  let durty = Str.regexp "[:\\\"]+"
+
+  let read = function
+    | PGOCaml.PostgreSQL_Error(error, _) ->
+      (match Str.split space (Str.global_replace durty "" error) with
+      | "ERROR" :: "26000" :: _ :: _ :: name :: _ -> NotFoundQuery name
+      | "ERROR" :: nb :: _ :: _ :: name :: _ -> Error (int_of_string nb, name))
+    | e -> raise e
+
+end
+
 module Table =
 struct
 
-  type name = As of string
+  type name =
+  | As of string
 
   type t =
   | Table of string
@@ -106,15 +126,15 @@ struct
 
   let (^^) a b = a ^ "_" ^ b
 
-  let runtime_execute dbh query params =
+  let runtime_execute dbh name query params =
     (* print_endline ("\nRuntime Execute:: " ^ name); *)
     (* List.iter (fun x -> match x with | Some x -> print_endline x | _ -> ()) params; *)
-    let ts = int_of_float (Unix.time ()) in
-    let id = Int64.to_int (Random.int64 (Int64.of_int 10000000)) in
-    let name = "runtime" ^^ (string_of_int ts) ^^ (string_of_int id) in
-    print_endline ("\nRuntime query"^ name ^"\n"^ query ^"\n");
-    lwt () = PGOCaml.prepare dbh ~query ~name () in
-    PGOCaml.execute dbh ~name ~params ()
+    let run () = PGOCaml.execute dbh ~name ~params () in
+    let prepare () = PGOCaml.prepare dbh ~query ~name () in
+    try_lwt run ()
+    with e -> match Error.read e with
+    | Error.NotFoundQuery name -> prepare () >>= run
+    | e -> begin print_endline ("PGOcaml error ::\n" ^ query); Lwt.return [] end
 
 end
 
@@ -723,10 +743,11 @@ struct
       Query.([Uri content_uri; String subject; Float mark]) @ tags
     in
     let values_nb = List.length tags in
+    let name = "tag_insert_" ^ (string_of_int values_nb) in
     let formated_tags = List.fold_left params_manager [] tags in
     let params = Query.Util.param_generator formated_tags in
     let query = QueryGen.runtime_insert ~values_nb () in
-    lwt results = Pg.runtime_execute dbh query params in
+    lwt results = Pg.runtime_execute dbh name query params in
     if List.length results = 0 then raise Not_found
     else Lwt.return (List.map Row.to_tag_id results)
 
@@ -830,10 +851,11 @@ struct
               Float mark; Float user_mark]) @ list
     in
     let values_nb = List.length links in
+    let name = "link_insert_" ^ (string_of_int values_nb) in
     let formated_links = List.fold_left params_manager [] links in
     let params = Query.Util.param_generator formated_links in
     let runtime_query = QueryGen.runtime_insert ~values_nb () in
-    lwt results = Pg.runtime_execute dbh runtime_query params in
+    lwt results = Pg.runtime_execute dbh name runtime_query params in
     if List.length results = 0 then raise Not_found
     else Lwt.return (List.map Row.to_link_id results)
 
