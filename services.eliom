@@ -20,9 +20,9 @@ struct
 
   (** [empty_fallback path msg]
       Generate an empty fallback which return an error [msg] at [path] *)
-  let empty_fallback ~path ~empty_msg =
+  let empty_fallback ?https ~path ~empty_msg =
     let get_params = Eliom_parameter.unit in
-    let service = Eliom_service.Http.service ~path ~get_params () in
+    let service = Eliom_service.Http.service ?https ~path ~get_params () in
     let handler () () = return_of_error (Tools.bad_request empty_msg) in
     let _ =  Eliom_registration.String.register ~service handler in
     service
@@ -33,7 +33,7 @@ struct
     (** [post_json fallback]
         Generate a post json service on the [fallback] path.  *)
     let post_register_service ~path ~empty_msg =
-      let fallback = empty_fallback ~path ~empty_msg in
+      let fallback = empty_fallback ~https:true ~path ~empty_msg in
       let post_params = Eliom_parameter.raw_post_data in
       Eliom_registration.String.register_post_service ~fallback ~post_params
 
@@ -50,27 +50,26 @@ struct
 
   let _ =
     Eliom_registration.String.register_service
-      ~path:["content"; "detail"]
+      ~https:true ~path:["content"; "detail"]
       ~get_params:Eliom_parameter.(suffix (string "content_uri"))
       (fun content_uri () -> return_of_json (Api.Content.get_detail content_uri))
 
   let _ =
     Eliom_registration.String.register_service
-      ~path:["content"; "list"]
+      ~https:true ~path:["content"; "list"]
       ~get_params:Eliom_parameter.unit
-      (fun () () ->
-        return_of_json (Api.Content.list ()))
+      (fun () () -> return_of_json (Api.Content.list ()))
 
   let _ =
     Eliom_registration.String.register_service
-      ~path:["content"; "search"]
+      ~https:true ~path:["content"; "search"]
       ~get_params:Eliom_parameter.(suffix (string "research"))
       (fun field () ->
         return_of_json (Api.Content.search field))
 
   let _ =
     Pumgrana_registration.Json.post_register_service
-      ~path:["content"; "insert"]
+      ~https:true ~path:["content"; "insert"]
       ~empty_msg:"title, summary and text parameters are mandatory"
       (fun () (input_type, ostream) ->
         let aux () =
@@ -84,7 +83,7 @@ struct
 
   let _ =
     Pumgrana_registration.Json.post_register_service
-      ~path:["content"; "delete"]
+      ~https:true ~path:["content"; "delete"]
       ~empty_msg:"contents_uri parameter is mandatory"
       (fun () (input_type, ostream) ->
         let aux () =
@@ -105,14 +104,14 @@ struct
 
   let _ =
     Eliom_registration.String.register_service
-      ~path:["tag"; "search"]
+      ~https:true ~path:["tag"; "search"]
       ~get_params:Eliom_parameter.(suffix (string "search"))
       (fun search () ->
         return_of_json (Api.Tag.search search))
 
   let _ =
     Eliom_registration.String.register_service
-      ~path:["tag"; "from_content"]
+      ~https:true ~path:["tag"; "from_content"]
       ~get_params:Eliom_parameter.(suffix (string "content_uri"))
       (fun (content_uri) () ->
         let uri = Ptype.uri_decode content_uri in
@@ -129,7 +128,7 @@ struct
 
   let _ =
     Eliom_registration.String.register_service
-      ~path:["linkedcontent"; "detail"]
+      ~https:true ~path:["linkedcontent"; "detail"]
       ~get_params:Eliom_parameter.(suffix (string "link_uri"))
       (fun link_uri () ->
         let uri = int_of_string link_uri in
@@ -137,7 +136,7 @@ struct
 
   let _ =
     Eliom_registration.String.register_service
-      ~path:["linkedcontent"; "from_content"]
+      ~https:true ~path:["linkedcontent"; "from_content"]
       ~get_params:Eliom_parameter.(suffix (string "content_uri"))
       (fun content_uri () ->
         let content_uri_dcd = Ptype.uri_decode content_uri in
@@ -145,7 +144,7 @@ struct
 
   let _ =
     Eliom_registration.String.register_service
-      ~path:["linkedcontent"; "from_content_tags"]
+      ~https:true ~path:["linkedcontent"; "from_content_tags"]
       ~get_params:Eliom_parameter.(suffix ((string "content_uri") **
                                               (list "tags" (string "subject"))))
       (fun (content_uri, subjects) () ->
@@ -155,7 +154,7 @@ struct
 
   let _ =
     Eliom_registration.String.register_service
-      ~path:["linkedcontent"; "search"]
+      ~https:true ~path:["linkedcontent"; "search"]
       ~get_params:Eliom_parameter.(suffix ((string "content_uri") **
                                               (string "research")))
       (fun (content_uri, research) () ->
@@ -173,7 +172,7 @@ struct
 
   let _ =
     Pumgrana_registration.Json.post_register_service
-      ~path:["link"; "insert"]
+      ~https:true ~path:["link"; "insert"]
       ~empty_msg:"All parameters are mandatory"
       (fun () (input_type, ostream) ->
         let aux () =
@@ -185,7 +184,7 @@ struct
 
   let _ =
     Pumgrana_registration.Json.post_register_service
-      ~path:["link"; "delete"]
+      ~https:true ~path:["link"; "delete"]
       ~empty_msg:"links_uri parameter is mandatory"
       (fun () (input_type, ostream) ->
         let aux () =
@@ -207,7 +206,7 @@ struct
 (* (\* Click on Link *\) *)
 (* let click_onlink = *)
 (*   Eliom_service.Http.service *)
-(*     ~path:["link"; "click"] *)
+(*     ~https:true ~path:["link"; "click"] *)
 (*     ~get_params:Eliom_parameter.(suffix (string "link_id")) () *)
 
 (* let _ = *)
@@ -224,7 +223,7 @@ struct
 (* (\* Back button *\) *)
 (* let back_button = *)
 (*   Eliom_service.Http.service *)
-(*     ~path:["link"; "back_button"] *)
+(*     ~https:true ~path:["link"; "back_button"] *)
 (*     ~get_params:Eliom_parameter.(suffix (string "link_id")) () *)
 
 (* let _ = *)

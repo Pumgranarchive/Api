@@ -112,8 +112,8 @@ struct
     PGOCaml.close dbh
 
   let prepare dbh name query =
-    print_endline ("\nPrepare:: " ^ name);
-    print_endline query;
+    (* print_endline ("\nPrepare:: " ^ name); *)
+    (* print_endline query; *)
     PGOCaml.prepare dbh ~query ~name ()
 
   let prepare_list dbh list =
