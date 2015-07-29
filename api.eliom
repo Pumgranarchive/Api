@@ -9,10 +9,15 @@ open Utils
 ************************************ Tools ************************************
 *******************************************************************************)
 
-let uri_of_string str =
-  try Ptype.uri_of_string str
-  with Ptype.Invalid_uri str_err ->
-    raise Conf.(Pum_exc (return_not_found, str_err))
+module Uri =
+struct
+
+  let of_string str =
+    try Ptype.uri_of_string (Urlnorm.normalize str)
+    with Ptype.Invalid_uri str_err ->
+      raise Conf.(Pum_exc (return_not_found, str_err))
+
+end
 
 let cut_research str =
   let regex = Str.regexp "[ \t]+" in
@@ -115,7 +120,7 @@ struct
 
   let get_detail content_str_uri =
     let aux () =
-      let uri = Ptype.uri_of_string content_str_uri in
+      let uri = Uri.of_string content_str_uri in
       lwt cid, dbh = Connector.get "Content.detail" in
       lwt res = try_lwt
         let lwt_body = Preadability.get_readability_body uri in
@@ -159,7 +164,7 @@ struct
   let insert content_str_uri title summary tags =
     let aux () =
       lwt cid, dbh = Connector.get "Content.insert" in
-      let uri = Ptype.uri_of_string content_str_uri in
+      let uri = Uri.of_string content_str_uri in
       let default_user_mark = 0. in
       let content = (uri, title, summary) in
       let full_content = (uri, title, summary, default_user_mark) in
@@ -180,7 +185,7 @@ struct
   let delete content_uris =
     let aux () =
       lwt cid, dbh = Connector.get "Content.delete" in
-      let uris = List.map Ptype.uri_of_string content_uris in
+      let uris = List.map Uri.of_string content_uris in
       lwt returned_uris = Postgres.Content.delete dbh uris in
       let json_list = List.map (fun u -> `String (Ptype.string_of_uri u))
         returned_uris
@@ -206,7 +211,7 @@ struct
   let list_from_content content_str_uri =
     let aux () =
       lwt cid, dbh = Connector.get "Tag.list_from_content" in
-      let content_uri = Ptype.uri_of_string content_str_uri in
+      let content_uri = Uri.of_string content_str_uri in
       lwt tags = Postgres.Tag.list_by_content_uri dbh content_uri in
       if List.length tags = 0 then PumBot.launch [content_uri];
       let result = `List (List.map format tags) in
@@ -264,7 +269,7 @@ struct
   let list_from_content str_content_uri =
     let aux () =
       lwt cid, dbh = Connector.get "LinkedContent.list_from_content" in
-      let uri = Ptype.uri_of_string str_content_uri in
+      let uri = Uri.of_string str_content_uri in
       lwt results = Postgres.LinkedContent.list_by_content_uri dbh uri in
       let list = List.map assoc results in
       if List.length list = 0 then PumBot.launch [uri];
@@ -276,7 +281,7 @@ struct
   let list_from_content_tags str_content_uri subjects =
     let aux () =
       lwt cid, dbh = Connector.get "LinkedContent.list_from_tags" in
-      let uri = Ptype.uri_of_string str_content_uri in
+      let uri = Uri.of_string str_content_uri in
       lwt results = Postgres.LinkedContent.list_by_content_tag dbh uri subjects in
       let list = List.map assoc results in
       if List.length list = 0 then PumBot.launch [uri];
@@ -290,7 +295,7 @@ struct
     let aux () =
       lwt cid, dbh = Connector.get "LinkedContent.search" in
       let research = cut_research research in
-      let content_uri = Ptype.uri_of_string content_uri in
+      let content_uri = Uri.of_string content_uri in
       let length = deep_cout research in
       lwt results =
           if length <= 2 then Lwt.return []
@@ -317,9 +322,9 @@ struct
   (*   let aux () = *)
   (*     let link_of_uri (origin_str_uri, target_str_uri, tags_str_uri, score) = *)
   (*       let data = *)
-  (*         uri_of_string origin_str_uri, *)
-  (*         uri_of_string target_str_uri, *)
-  (*         List.map uri_of_string tags_str_uri, *)
+  (*         Uri.of_string origin_str_uri, *)
+  (*         Uri.of_string target_str_uri, *)
+  (*         List.map Uri.of_string tags_str_uri, *)
   (*         score *)
   (*       in *)
   (*       data *)
@@ -342,8 +347,8 @@ struct
     let aux () =
       lwt cid, dbh = Connector.get "Link.insert" in
       let format (str_origin_uri, str_target_uri, nature, mark) =
-        let origin_uri = Ptype.uri_of_string str_origin_uri in
-        let target_uri = Ptype.uri_of_string str_target_uri in
+        let origin_uri = Uri.of_string str_origin_uri in
+        let target_uri = Uri.of_string str_target_uri in
         (origin_uri, target_uri, nature, mark, 0.)
       in
       (* lwt lwt_link_ids = Lwt_list.map_exc one links in *)
