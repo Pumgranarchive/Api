@@ -12,10 +12,15 @@ open Utils
 module Uri =
 struct
 
-  let of_string str =
-    try Ptype.uri_of_string (Urlnorm.normalize str)
+  let of_strings durty_urls =
+    try
+      let urls = Urlnorm.normalize durty_urls in
+      List.map Ptype.uri_of_string urls
     with Ptype.Invalid_uri str_err ->
       raise Conf.(Pum_exc (return_not_found, str_err))
+
+  let of_string durty_url =
+    List.hd (of_strings [durty_url])
 
 end
 
@@ -185,7 +190,7 @@ struct
   let delete content_uris =
     let aux () =
       lwt cid, dbh = Connector.get "Content.delete" in
-      let uris = List.map Uri.of_string content_uris in
+      let uris = Uri.of_strings content_uris in
       lwt returned_uris = Postgres.Content.delete dbh uris in
       let json_list = List.map (fun u -> `String (Ptype.string_of_uri u))
         returned_uris
@@ -347,8 +352,9 @@ struct
     let aux () =
       lwt cid, dbh = Connector.get "Link.insert" in
       let format (str_origin_uri, str_target_uri, nature, mark) =
-        let origin_uri = Uri.of_string str_origin_uri in
-        let target_uri = Uri.of_string str_target_uri in
+        let uris = Uri.of_strings [str_origin_uri; str_target_uri] in
+        let origin_uri = List.nth uris 0 in
+        let target_uri = List.nth uris 1 in
         (origin_uri, target_uri, nature, mark, 0.)
       in
       (* lwt lwt_link_ids = Lwt_list.map_exc one links in *)
