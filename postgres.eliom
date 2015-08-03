@@ -8,7 +8,7 @@
 *******************************************************************************)
 
 open Utils
-module Configuration = Conf.Configuration
+module Conf = Conf.Configuration
 
 let () = Random.self_init ()
 
@@ -56,13 +56,6 @@ struct
 
 end
 
-module Conf =
-struct
-  let limit = 20
-  let mark_decimal = 3.
-  let mark_precision = Utils.Maths.power 10. mark_decimal
-end
-
 module Format =
 struct
 
@@ -102,18 +95,17 @@ module Pg =
 struct
 
   let connect () = Lwt_PGOCaml.connect
-    ?host:Configuration.Postgres.host
-    ~user:Configuration.Postgres.user
-    ?password:Configuration.Postgres.pwd
-    ~database:Configuration.Postgres.db
+    ?host:Conf.Postgres.host
+    ~user:Conf.Postgres.user
+    ?password:Conf.Postgres.pwd
+    ~database:Conf.Postgres.db
     ()
 
   let close dbh =
     PGOCaml.close dbh
 
   let prepare dbh name query =
-    (* print_endline ("\nPrepare:: " ^ name); *)
-    (* print_endline query; *)
+    if Conf.Api.verbose then Printf.printf "\nPrepare :: %s\n%s\n" name query;
     PGOCaml.prepare dbh ~query ~name ()
 
   let prepare_list dbh list =
@@ -122,15 +114,21 @@ struct
     Lwt.return ()
 
   let execute dbh name params =
-    (* print_endline ("\nExecute:: " ^ name); *)
-    (* List.iter (fun x -> match x with | Some x -> print_endline x | _ -> ()) params; *)
+    if Conf.Api.verbose then
+      begin
+        Printf.printf "\nExecutre :: %s\n" name;
+        List.iter (fun x -> match x with | Some x -> print_endline x | _ -> ()) params
+      end;
     PGOCaml.execute dbh ~name ~params ()
 
   let (^^) a b = a ^ "_" ^ b
 
   let runtime_execute dbh name query params =
-    (* print_endline ("\nRuntime Execute:: " ^ name); *)
-    (* List.iter (fun x -> match x with | Some x -> print_endline x | _ -> ()) params; *)
+    if Conf.Api.verbose then
+      begin
+        print_endline ("\nRuntime Execute:: " ^ name);
+        List.iter (fun x -> match x with | Some x -> print_endline x | _ -> ()) params
+      end;
     let run () = PGOCaml.execute dbh ~name ~params () in
     let prepare () = PGOCaml.prepare dbh ~query ~name () in
     try_lwt run ()
@@ -473,7 +471,7 @@ struct
     Ptype.compare_uri uri_1 uri_2 +
     String.compare title_1 title_2 +
     String.compare summary_1 summary_2 +
-    int_of_float ((user_mark_1 -. user_mark_2) *. Conf.mark_precision)
+    int_of_float ((user_mark_1 -. user_mark_2) *. Conf.Postgres.mark_precision)
 
   module QueryName =
   struct
@@ -496,12 +494,12 @@ struct
       let contitions = Query.(First (("content_uri", Value), End)) in
       let group_keys = ["content_uri"] in
       Query.select Format.Get.content [Table.content] contitions
-        ~group_keys Conf.limit
+        ~group_keys Conf.Postgres.limit
 
     let list () =
       let group_keys = ["content_uri"] in
       Query.select Format.Get.content [Table.content] Query.All
-        ~group_keys Conf.limit
+        ~group_keys Conf.Postgres.limit
 
     let list_by_subject () =
       let contitions =
@@ -511,7 +509,7 @@ struct
       let group_keys = ["content.content_uri"] in
       let order_keys = Query.([DESC "max(mark)"]) in
       Query.select Format.Get.content Table.([content; tag]) contitions
-        ~group_keys ~order_keys Conf.limit
+        ~group_keys ~order_keys Conf.Postgres.limit
 
     let search_by_title_and_summary () =
       let contitions = Query.(First (("title", Regexp),
@@ -519,7 +517,7 @@ struct
       in
       let group_keys = ["content_uri"] in
       Query.select Format.Get.content Table.([content]) contitions
-        ~group_keys Conf.limit
+        ~group_keys Conf.Postgres.limit
 
     let search_by_subject () =
       let contitions =
@@ -529,12 +527,12 @@ struct
       let group_keys = ["content.content_uri"] in
       let order_keys = Query.([DESC "max(mark)"]) in
       Query.select Format.Get.content Table.([content; tag]) contitions
-        ~group_keys ~order_keys Conf.limit
+        ~group_keys ~order_keys Conf.Postgres.limit
 
     let search () =
       let query1 = search_by_title_and_summary () in
       let query2 = search_by_subject () in
-      Query.union query1 query2 Conf.limit
+      Query.union query1 query2 Conf.Postgres.limit
 
     let base_insert ?dollars_offset () =
       let returns = ["content_uri"] in
@@ -666,7 +664,7 @@ struct
     id_1 - id_2 +
     Ptype.compare_uri uri_1 uri_2 +
     String.compare subject_1 subject_2 +
-    int_of_float ((mark_1 -. mark_2) *. Conf.mark_precision)
+    int_of_float ((mark_1 -. mark_2) *. Conf.Postgres.mark_precision)
 
   module QueryName =
   struct
@@ -686,20 +684,20 @@ struct
       let contitions = Query.(First (("tag_id", Value), End)) in
       let group_keys = ["tag_id"] in
       Query.select Format.Get.tag [Table.tag] contitions
-        ~group_keys Conf.limit
+        ~group_keys Conf.Postgres.limit
 
     let list () =
       let group_keys = ["tag_id"] in
       let order_keys = Query.([DESC "mark"]) in
       Query.select Format.Get.tag [Table.tag] Query.All
-        ~group_keys ~order_keys Conf.limit
+        ~group_keys ~order_keys Conf.Postgres.limit
 
     let list_by_content_uri () =
       let contitions = Query.(First (("content_uri", Value), End)) in
       let group_keys = ["tag_id"] in
       let order_keys = Query.([DESC "mark"]) in
       Query.select Format.Get.tag Table.([tag]) contitions
-        ~group_keys ~order_keys Conf.limit
+        ~group_keys ~order_keys Conf.Postgres.limit
 
     let search () =
       let contitions = Query.(First (("subject", Regexp), End)) in
@@ -707,7 +705,7 @@ struct
       let group_keys = ["tag_id"] in
       let order_keys = Query.([DESC "subject"; DESC "max(mark)"]) in
       Query.select Format.Get.tag Table.([tag]) contitions
-        ~distinct_keys ~group_keys ~order_keys Conf.limit
+        ~distinct_keys ~group_keys ~order_keys Conf.Postgres.limit
 
     let runtime_insert ?values_nb () =
       let returns = ["tag_id"] in
@@ -826,8 +824,8 @@ struct
     Ptype.compare_uri origin_uri_1 origin_uri_2 +
     Ptype.compare_uri target_uri_1 target_uri_2 +
     String.compare nature_1 nature_2 +
-    int_of_float ((mark_1 -. mark_2) *. Conf.mark_precision) +
-    int_of_float ((user_mark_1 -. user_mark_2) *. Conf.mark_precision)
+    int_of_float ((mark_1 -. mark_2) *. Conf.Postgres.mark_precision) +
+    int_of_float ((user_mark_1 -. user_mark_2) *. Conf.Postgres.mark_precision)
 
   module QueryName =
   struct
@@ -934,8 +932,8 @@ struct
       (id_2, nature_2, mark_2, user_mark_2, uri_2, title_2, summary_2) =
     id_1 - id_2 +
     String.compare nature_1 nature_2 +
-    int_of_float ((mark_1 -. mark_2) *. Conf.mark_precision) +
-    int_of_float ((user_mark_1 -. user_mark_2) *. Conf.mark_precision) +
+    int_of_float ((mark_1 -. mark_2) *. Conf.Postgres.mark_precision) +
+    int_of_float ((user_mark_1 -. user_mark_2) *. Conf.Postgres.mark_precision) +
     Ptype.compare_uri uri_1 uri_2 +
     String.compare title_1 title_2 +
     String.compare summary_1 summary_2
@@ -959,7 +957,7 @@ struct
       in
       let tables = Table.([link; content]) in
       Query.select Format.Get.linked_content tables contitions
-        Conf.limit
+        Conf.Postgres.limit
 
     let list () =
       let contitions =
@@ -969,7 +967,7 @@ struct
       let tables = Table.([link; content]) in
       let order_keys = Query.([DESC "content.content_uri"; DESC "link.mark"]) in
       Query.select ~distinct_keys Format.Get.linked_content tables contitions
-        ~order_keys Conf.limit
+        ~order_keys Conf.Postgres.limit
 
     let list_by_content_uri () =
       let contitions =
@@ -980,7 +978,7 @@ struct
       let tables = Table.([link; content]) in
       let order_keys = Query.([DESC "content.content_uri"; DESC "link.mark"]) in
       Query.select ~distinct_keys Format.Get.linked_content tables contitions
-        ~order_keys Conf.limit
+        ~order_keys Conf.Postgres.limit
 
     let list_by_content_tag () =
       let contitions =
@@ -993,7 +991,7 @@ struct
       let order_keys = Query.([DESC "content.content_uri"; DESC "link.mark"]) in
       let tables = Table.([link; content; tag]) in
       Query.select ~distinct_keys Format.Get.linked_content tables contitions
-        ~order_keys Conf.limit
+        ~order_keys Conf.Postgres.limit
 
     let search () =
 
@@ -1020,7 +1018,7 @@ struct
       in
       let tables'' = Table.([Query (query', As "linkedcontent"); tag]) in
       let first_dollars = 1 in
-      Query.select format tables'' where'' ~first_dollars Conf.limit
+      Query.select format tables'' where'' ~first_dollars Conf.Postgres.limit
 
   end
 

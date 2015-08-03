@@ -24,13 +24,16 @@
       <eliom module="%%LIBDIR%%/%%PROJECT_NAME%%.cma">
          <postgresql>
             <host></host>
-            <user>nox</user>
+            <user>api</user>
             <pwd></pwd>
-            <dbname>nox</dbname>
+            <dbname>pumgrana</dbname>
             <maxconnections>20</maxconnections>
+            <limit>20</limit>
+            <markdecimal>3</markdecimal>
          </postgresql>
          <api>
             <timeout>2.00</timeout>
+            <mode>not_verbose</mode>
          </api>
       </eliom>
     </host>

@@ -103,7 +103,7 @@ struct
 
 end
 
-let () = Connector.fill Conf.Configuration.Postgres.maxconnections
+let () = Connector.fill Conf.Configuration.Postgres.max_connections
 
 (******************************************************************************
 *********************************** Content ***********************************

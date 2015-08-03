@@ -2,6 +2,8 @@
 **   API Configuration file
 *)
 
+open Utils
+
 (** {6 API exception} *)
 exception Pum_exc of int * string
 
@@ -88,11 +90,16 @@ struct
   struct
 
     let block = Read.block Read.config "postgresql"
+
     let host = Read.opt_string block "host"
     let user = Read.string block "user"
     let pwd = Read.opt_string block "pwd"
     let db = Read.string block "dbname"
-    let maxconnections = Read.int block "maxconnections"
+    let max_connections = Read.int block "maxconnections"
+
+    let limit = Read.int block "limit"
+    let mark_decimal = Read.float block "markdecimal"
+    let mark_precision = Utils.Maths.power 10. mark_decimal
 
   end
 
@@ -100,7 +107,11 @@ struct
   struct
 
     let block = Read.block Read.config "api"
+
     let timeout = Read.float block "timeout"
+
+    let mode = Read.string block "mode"
+    let verbose = String.compare mode "verbose" == 0
 
   end
 
