@@ -61,4 +61,5 @@ CREATE TABLE Tag (
 => scp admin@api.pumgrana.com:token .
 
 10) Check if it does work !
+=> make test.byte
 => http://localhost:8081/content/list
