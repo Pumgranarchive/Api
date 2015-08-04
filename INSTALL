@@ -1,0 +1,64 @@
+1) Install opam and eliom using dev versions (Have a look into script repository) // TODO: give more detail for 1)
+
+2) scp Arnaud's opam tar.
+=> scp admin@api.pumgrana.com:opam.tar.gz .
+
+3) replace your opam folder with Arnaud's one.
+
+4) create a fake user "nox"
+=> ln -s /home/USER_NAME /home/nox
+
+5) create your template
+=> From the root folder of API.
+=> cp pumgrana.conf.in.template pumgrana.conf.in
+
+6) edit "pumgrana.conf.in"
+=> edit "host>eliom>postgresql>user" and "host>eliom>postgresql>dbname" nodes
+=> 
+<postgresql>
+ <user>USER_NAME</user>
+ <dbname>USER_NAME</dbname>
+</postgresql>
+
+7) install "postgresSQL" by using the script from script repository
+=> clone the repo
+=> cd scripts/PostgreSQL/Install/
+=> sudo su postgres
+=> createuser USER_NAME
+=> createdb USER_NAME
+
+
+8) Execute the folowing command
+
+echo 'DROP TABLE link;
+DROP TABLE Tag;
+DROP TABLE content;
+
+CREATE TABLE Content (
+       content_uri text CONSTRAINT pk_content PRIMARY KEY,
+       title varchar(255),
+       summary varchar(255),
+	   user_mark real
+);
+
+CREATE TABLE Link (
+       link_id bigserial CONSTRAINT pk_link PRIMARY KEY,
+       origin_uri text,
+       target_uri text,
+       nature varchar(255),
+       mark real,
+       user_mark real
+);
+
+CREATE TABLE Tag (
+       tag_id bigserial CONSTRAINT pk_tag PRIMARY KEY,
+       content_uri text,
+       subject varchar(255),
+       mark real
+);' | psql -U USER_NAME -d USER_NAME
+
+9) get readability token
+=> scp admin@api.pumgrana.com:token .
+
+10) Check if it does work !
+=> http://localhost:8081/content/list
