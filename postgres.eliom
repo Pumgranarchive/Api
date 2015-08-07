@@ -116,7 +116,7 @@ struct
   let execute dbh name params =
     if Conf.Api.verbose then
       begin
-        Printf.printf "\nExecutre :: %s\n" name;
+        Printf.printf "\nExecute :: %s\n" name;
         List.iter (fun x -> match x with | Some x -> print_endline x | _ -> ()) params
       end;
     PGOCaml.execute dbh ~name ~params ()
@@ -1016,9 +1016,10 @@ struct
       let format = ["link_id"; "nature"; "linkedcontent.mark"; "user_mark";
                     "linkedcontent.content_uri"; "title"; "summary"]
       in
+      let group_keys = format in
       let tables'' = Table.([Query (query', As "linkedcontent"); tag]) in
       let first_dollars = 1 in
-      Query.select format tables'' where'' ~first_dollars Conf.Postgres.limit
+      Query.select format tables'' where'' ~group_keys ~first_dollars Conf.Postgres.limit
 
   end
 
