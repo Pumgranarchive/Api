@@ -20,7 +20,6 @@ CLIENT_FILES_DOC :=     nosql_store.eliomi      \
 # OCamlfind packages for the server
 SERVER_PACKAGES :=   pgocaml pgocaml.syntax \
                      yojson \
-                     bson \
                      cohttp cohttp.lwt  \
                      rdf rdf.lwt \
                      ptools \
