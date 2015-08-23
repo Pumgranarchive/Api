@@ -12,15 +12,15 @@ open Utils
 module Uri =
 struct
 
-  let of_strings durty_urls =
+  let of_strings dirty_urls =
     try
-      let urls = Urlnorm.normalize durty_urls in
+      let urls = Urlnorm.normalize dirty_urls in
       List.map Ptype.uri_of_string urls
     with Ptype.Invalid_uri str_err ->
       raise Conf.(Pum_exc (return_not_found, str_err))
 
-  let of_string durty_url =
-    List.hd (of_strings [durty_url])
+  let of_string dirty_url =
+    List.hd (of_strings [dirty_url])
 
 end
 

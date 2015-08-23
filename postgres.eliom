@@ -28,11 +28,11 @@ struct
   | Unkown
 
   let space = Str.regexp "[ \t]+"
-  let durty = Str.regexp "[:\\\"]+"
+  let dirty = Str.regexp "[:\\\"]+"
 
   let read = function
     | PGOCaml.PostgreSQL_Error(error, _) ->
-      (match Str.split space (Str.global_replace durty "" error) with
+      (match Str.split space (Str.global_replace dirty "" error) with
       | "ERROR" :: "26000" :: _ :: _ :: name :: _ -> NotFoundQuery name
       | "ERROR" :: nb :: _ :: _ :: name :: _ -> Error (int_of_string nb, name)
       | _ -> Unkown)
