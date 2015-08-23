@@ -22,11 +22,11 @@ SERVER_PACKAGES :=   pgocaml pgocaml.syntax \
                      yojson \
                      cohttp cohttp.lwt  \
                      rdf rdf.lwt \
+                     urlnorm \
                      ptools \
                      bfy \
                      readability_http    \
-                     tidy                \
-                     urlnorm
+                     tidy
 
 # OCamlfind packages for the client
 CLIENT_PACKAGES :=   yojson \
