@@ -530,9 +530,15 @@ struct
         ~group_keys ~order_keys Conf.Postgres.limit
 
     let search () =
-      let query1 = search_by_title_and_summary () in
-      let query2 = search_by_subject () in
-      Query.union query1 query2 Conf.Postgres.limit
+      let contitions =
+        Query.(First (("content.content_uri", Depend "tag.content_uri"),
+               And (("title", Regexp),
+               Or (("summary", Regexp),
+               Or (("subject", Regexp), End)))))
+      in
+      let group_keys = ["content.content_uri"] in
+      Query.select Format.Get.content Table.([content; tag]) contitions
+        ~group_keys Conf.Postgres.limit
 
     let base_insert ?dollars_offset () =
       let returns = ["content_uri"] in
@@ -606,7 +612,9 @@ struct
     Lwt.return (List.map Row.to_content results)
 
   let search dbh fields =
-    let params = Query.Util.param_generator Query.([Words fields; Words fields]) in
+    let params =
+      Query.Util.param_generator Query.([Words fields; Words fields; Words fields])
+    in
     lwt results = Pg.execute dbh QueryName.search params in
     Lwt.return (List.map Row.to_content results)
 
