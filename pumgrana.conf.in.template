@@ -5,6 +5,11 @@
 <ocsigen>
   <server>
     <port>%%PORT%%</port>
+    <port protocol="HTTPS">4443</port>
+    <ssl>
+       <certificate>ssl/server.crt</certificate>
+       <privatekey>ssl/server.key</privatekey>
+    </ssl>
     %%% Only set for running, not for testing
     %%USERGROUP%%
     <logdir>%%LOGDIR%%</logdir>
