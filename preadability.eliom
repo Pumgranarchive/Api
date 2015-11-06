@@ -37,9 +37,8 @@ let log suri exc detail =
 
 let data_from_uri uri =
   let str_uri = Ptype.string_of_uri uri in
-  let ruri = Rdf_uri.uri str_uri in
   lwt json =
-      try_lwt Readability_http.get_parser ruri
+      try_lwt Readability_http.get_parser uri
       with exc -> log str_uri exc ""
   in
   try_lwt
