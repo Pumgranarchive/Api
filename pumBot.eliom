@@ -1,8 +1,9 @@
-let bot_api_uri = "http://127.0.0.1:8083"
+module Conf = Conf.Configuration
+
 let default_iteration = "2550"
 
 let launch uris =
-  let base_url = bot_api_uri ^ "/run/"^default_iteration^"//" in
+  let base_url = Conf.Bot.host ^ "/run/"^default_iteration^"//" in
   let str_uris = List.map (fun x -> Ptype.uri_encode (Ptype.string_of_uri x)) uris in
   let concat_uris = String.concat "/" str_uris in
   let request_url = base_url ^ concat_uris ^ "/" in

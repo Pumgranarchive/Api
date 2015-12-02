@@ -115,4 +115,14 @@ struct
 
   end
 
+  module Bot =
+  struct
+
+    let block = Read.block Read.config "bot"
+
+    let host = Read.string block "host"
+
+  end
+
+
 end

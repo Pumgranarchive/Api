@@ -40,6 +40,9 @@
             <timeout>2.00</timeout>
             <mode>not_verbose</mode>
          </api>
+         <bot>
+            <host>http://127.0.0.1:8083</host>
+         </bot>
       </eliom>
     </host>
   </server>
