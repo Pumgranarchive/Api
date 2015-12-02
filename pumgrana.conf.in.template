@@ -42,6 +42,7 @@
          </api>
          <bot>
             <host>http://127.0.0.1:8083</host>
+            <deep>1</deep>
          </bot>
       </eliom>
     </host>

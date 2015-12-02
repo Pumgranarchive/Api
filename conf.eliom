@@ -121,6 +121,7 @@ struct
     let block = Read.block Read.config "bot"
 
     let host = Read.string block "host"
+    let deep = Read.int block "deep"
 
   end
 
