@@ -896,7 +896,7 @@ struct
     let runtime_query = QueryGen.runtime_insert ~values_nb () in
     lwt results = Pg.runtime_execute dbh name runtime_query params in
     if List.length results = 0 then raise Not_found
-    else Lwt.return (List.map Row.to_link_id results)
+    else Lwt.return (List.rev (List.map Row.to_link_id results))
 
   let update dbh id (origin_uri, target_uri, nature, mark) =
     let params = Query.Util.param_generator

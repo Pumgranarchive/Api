@@ -222,16 +222,22 @@ let main () =
   let title_3 = "Carotte" in
   let summary_3 = "legume" in
   let uri_3 = Ptype.uri_of_string "http://carotte.com" in
+  let title_4 = "Aubergine" in
+  let summary_4 = "legume" in
+  let uri_4 = Ptype.uri_of_string "http://aubergine.com" in
   let nature_1 = "Nothing" in
   let nature_2 = "Potage" in
   let subject_2 = "Salade" in
   let tag_2 = (uri_3, subject_2, 42.2) in
 
   let content_3 = (uri_3, title_3, summary_3, 0.) in
+  let content_4 = (uri_4, title_4, summary_4, 0.) in
   let link_1 = (uri, uri_3, nature_1, 3., 1.) in
   let link_2 = (uri, uri_3, nature_2, 5.) in
+  let link_3 = (uri, uri_4, nature_1, 3., 1.) in
   let linked_content_1 = (nature_1, 3., 1., uri_3, title_3, summary_3) in
   let linked_content_2 = (nature_2, 5., 1., uri_3, title_3, summary_3) in
+  let linked_content_3 = (nature_2, 5., 1., uri_4, title_4, summary_4) in
 
   let add_link_id id (nature, mark, user_mark, uri, title, summary) =
     (id, nature, mark, user_mark, uri, title, summary)
@@ -250,8 +256,8 @@ let main () =
     print_endline ("Failed    ::\t"^name);
     print_endline "Caused By ::";
     print_endline desc;
-    lwt _ = Postgres.Content.delete dbh [uri_3] in
-    lwt _ = Postgres.Link.delete dbh [get_link_id ()] in
+    lwt _ = Postgres.Content.delete dbh [uri_3; uri_4] in
+    lwt _ = Postgres.Link.delete dbh (get_link_id ()) in
     lwt _ = Postgres.Tag.delete dbh (get_ids ()) in
     lwt _ = Postgres.Content.delete dbh [uri] in
     exit 0
@@ -273,16 +279,18 @@ let main () =
     lwt tag_id = Utils.Lwt_list.hd (Postgres.Tag.inserts dbh [tag_2]) in
     let () = set_id tag_id in
     lwt _ = Postgres.Content.insert dbh content_3 in
-    lwt id' = Utils.Lwt_list.hd (Postgres.Link.inserts dbh [link_1]) in
+    lwt _ = Postgres.Content.insert dbh content_4 in
+    lwt id' = Postgres.Link.inserts dbh [link_1; link_3] in
     let () = set_link_id id' in
-    lwt link' = Postgres.LinkedContent.get dbh id' in
-    let full_link_1 = add_link_id id' linked_content_1 in
+    let id_1 = List.hd id' in
+    lwt link' = Postgres.LinkedContent.get dbh id_1 in
+    let full_link_1 = add_link_id id_1 linked_content_1 in
     if Postgres.LinkedContent.compare full_link_1 link' != 0
     then failed name (string_of_link_diff full_link_1 link')
     else succeed name)
   in
 
-  let link_id = get_link_id () in
+  let link_id = List.hd (get_link_id ()) in
   let full_link_2 = add_link_id link_id linked_content_2 in
 
   lwt () = wrap_try "Link.Update" (fun name ->
