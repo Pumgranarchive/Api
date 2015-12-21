@@ -367,7 +367,7 @@ let main () =
   in
 
   lwt () = wrap_try "Content.Delete" (fun name ->
-    lwt uri' = Utils.Lwt_list.hd (Postgres.Content.delete dbh [uri; uri_3]) in
+    lwt uri' = Utils.Lwt_list.hd (Postgres.Content.delete dbh [uri; uri_3; uri_4]) in
     lwt _ =
       try_lwt Postgres.Content.get dbh uri
       with
