@@ -33,9 +33,9 @@ let deep_cout str_list =
 
 let is_something_else uri = true
 
-let detail_platforms =
-  [(Pyoutube.is_youtube_uri,    Pyoutube.get_youtube_detail);
-   (is_something_else,          Preadability.get_readability_detail)]
+(* let detail_platforms = *)
+(*   [(Pyoutube.is_youtube_uri,    Pyoutube.get_youtube_detail); *)
+(*    (is_something_else,          Preadability.get_readability_detail)] *)
 
 let rec get_data_from uri = function
   | (condiction, getter)::next ->
@@ -123,20 +123,20 @@ struct
             (Tools.title_field, `String title);
             (Tools.summary_field, `String summary)]
 
-  let get_detail content_str_uri =
-    let aux () =
-      let uri = Uri.of_string content_str_uri in
-      lwt cid, dbh = Connector.get "Content.detail" in
-      lwt res = try_lwt
-        let lwt_body = Preadability.get_readability_body uri in
-        lwt content = Postgres.Content.get dbh uri in
-        lwt body = lwt_body in
-        Lwt.return (full_assoc (content, body))
-      with Not_found -> Lwt.return `Null in
-      lwt () = Connector.put "Content.detail" (cid, dbh) in
-      Lwt.return res
-    in
-    Tools.check_return ~param_name:Tools.contents_ret_name aux
+  (* let get_detail content_str_uri = *)
+  (*   let aux () = *)
+  (*     let uri = Uri.of_string content_str_uri in *)
+  (*     lwt cid, dbh = Connector.get "Content.detail" in *)
+  (*     lwt res = try_lwt *)
+  (*       let lwt_body = Preadability.get_readability_body uri in *)
+  (*       lwt content = Postgres.Content.get dbh uri in *)
+  (*       lwt body = lwt_body in *)
+  (*       Lwt.return (full_assoc (content, body)) *)
+  (*     with Not_found -> Lwt.return `Null in *)
+  (*     lwt () = Connector.put "Content.detail" (cid, dbh) in *)
+  (*     Lwt.return res *)
+  (*   in *)
+  (*   Tools.check_return ~param_name:Tools.contents_ret_name aux *)
 
   let list () =
     let aux () =

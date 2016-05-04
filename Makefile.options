@@ -14,8 +14,7 @@ CLIENT_FILES := $(wildcard *.eliomi *.eliom)
 SERVER_FILES_DOC :=     $(wildcard *.eliomi)
 
 # Source files for the client
-CLIENT_FILES_DOC :=     nosql_store.eliomi      \
-                        rdf_store.eliomi
+CLIENT_FILES_DOC :=
 
 # OCamlfind packages for the server
 SERVER_PACKAGES :=   pgocaml pgocaml.syntax \
@@ -24,9 +23,7 @@ SERVER_PACKAGES :=   pgocaml pgocaml.syntax \
                      rdf rdf.lwt \
                      urlnorm \
                      ptools \
-                     bfy \
-                     readability_http    \
-                     tidy
+                     bfy
 
 # OCamlfind packages for the client
 CLIENT_PACKAGES :=   yojson \

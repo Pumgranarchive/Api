@@ -60,8 +60,8 @@ let get_youtube_triple uris =
   in
   Lwt.return (know_data@new_data)
 
-let get_youtube_detail uri =
-  lwt results = get_youtube_triple [uri] in
-  lwt uri, title, summary = List.hd results in
-  lwt body = Preadability.get_readability_body uri in
-  Lwt.return (uri, title, summary, body, true)
+(* let get_youtube_detail uri = *)
+(*   lwt results = get_youtube_triple [uri] in *)
+(*   lwt uri, title, summary = List.hd results in *)
+(*   lwt body = Preadability.get_readability_body uri in *)
+(*   Lwt.return (uri, title, summary, body, true) *)

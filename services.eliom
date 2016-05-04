@@ -48,11 +48,11 @@ end
 module Content =
 struct
 
-  let _ =
-    Eliom_registration.String.register_service
-      ~path:["content"; "detail"]
-      ~get_params:Eliom_parameter.(suffix (string "content_uri"))
-      (fun content_uri () -> return_of_json (Api.Content.get_detail content_uri))
+  (* let _ = *)
+  (*   Eliom_registration.String.register_service *)
+  (*     ~path:["content"; "detail"] *)
+  (*     ~get_params:Eliom_parameter.(suffix (string "content_uri")) *)
+  (*     (fun content_uri () -> return_of_json (Api.Content.get_detail content_uri)) *)
 
   let _ =
     Eliom_registration.String.register_service

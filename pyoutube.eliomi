@@ -17,7 +17,7 @@ val get_youtube_triple : Ptype.uri list ->
     @return the data assossiated with the given [uri]
     formated as (uri, title, summary, body, is_external)
 *)
-val get_youtube_detail : Ptype.uri ->
-  (Ptype.uri * string * string * string * bool) Lwt.t
+(* val get_youtube_detail : Ptype.uri -> *)
+(*   (Ptype.uri * string * string * string * bool) Lwt.t *)
 
 }}
